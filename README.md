@@ -10,21 +10,29 @@ streamlit run app.py
 - 🏠 首頁：下一場考試、最近公車、今日課程
 - 📆 課表：依學校節次（或自訂時間）填入課程，可填教授 / 教室 / 學分 / 備註；同一門課第二次起可直接選用
 - 📅 考試提醒：新增 / 刪除考試與倒數
-- 🚌 公車班表：兩條校內線 + 一條校外線，同一個出發地
+- 🚌 公車班表：兩條校內線（上山 / 下山）+ 一條校外線，目前僅平日
 
 ## 填公車時間
-編輯 `data/bus_schedule.json`：
+編輯 `data/bus_schedule.json`。每條路線有一到多個「方向」，各自有出發地與時刻表：
 ```json
 {
-  "origin": "校門口",
   "routes": [
-    {"name": "校內線 1", "type": "campus", "weekday": "07:30, 08:00, 08:30", "weekend": "09:00, 10:00"}
+    {"name": "校內線 1", "type": "campus", "directions": [
+      {"name": "上山", "origin": "校門口", "weekday": "07:30, 08:00, 08:30"},
+      {"name": "下山", "origin": "台積館", "weekday": "07:45, 08:15"}
+    ]}
   ]
 }
 ```
-- `weekday` 平日、`weekend` 假日；逗號或空格分隔，順序不用排，也可寫成陣列 `["07:30", "08:00"]`
+- 校內線：上山（校門口出發）、下山（台積館出發）；校外線只有一個方向
+- `weekday` 平日；逗號或空格分隔，順序不用排，也可寫成陣列 `["07:30", "08:00"]`
 - `type`：`campus`（校內）或 `offcampus`（校外）
+- 目前公車只有平日；之後要加假日，在 `features/bus_schedule.py` 的 `SERVICE_DAYS` 加一行，並在各方向補 `weekend`
 - 引號與逗號請用半形；寫錯時頁面會顯示提示
+
+## 淺色 / 深色 / 自動
+用 Streamlit 內建的主題切換：右上角 ⋮ → Settings → Theme（Light / Dark / Use system setting）。
+`.streamlit/config.toml` 刻意不設定 `[theme]`，預設就是跟隨系統（自動）。
 
 ## 課表節次
 節次與時間定義在 `config.py` 的 `PERIODS`，學校調整時間只要改那裡。

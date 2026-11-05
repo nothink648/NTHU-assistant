@@ -6,7 +6,7 @@ import streamlit as st
 from config import APP_ICON, APP_TITLE, WEEKDAYS
 from core.ui import badge, card, esc, hero, html
 from features.base import Feature
-from features.bus_schedule import eta_text, get_next_buses, load_routes
+from features.bus_schedule import eta_text, get_directions, get_next_buses, is_service_day, load_bus_data
 from features.exam_reminder import countdown_text, exam_datetime, get_upcoming_exams
 from features.timetable import to_min, today_classes
 
@@ -25,12 +25,17 @@ def exam_summary(now: datetime) -> str:
 
 def bus_summary(now: datetime) -> str:
     head = '<div class="card-head"><span class="card-title">🚌 最近一班公車</span></div>'
+    if not is_service_day(now):
+        return card(head + '<div class="muted">假日無班次（目前只有平日班表）</div>')
+    data, _ = load_bus_data()
     rows = []
-    for r in load_routes():
-        nxt = get_next_buses(r, now, n=1)
-        if nxt:
-            rows.append(f'<div class="row"><span class="t">{esc(r.get("name", ""))}　{nxt[0][0]}</span>'
-                        f'<span class="e">{eta_text(nxt[0][1])}</span></div>')
+    for r in data.get("routes", []):
+        for d in get_directions(r, data.get("origin", "")):
+            nxt = get_next_buses(d, now, n=1)
+            if nxt:
+                label = r.get("name", "") + ("" if d.get("name") == "發車" else f"・{d.get('name', '')}")
+                rows.append(f'<div class="row"><span class="t">{esc(label)}　{nxt[0][0]}</span>'
+                            f'<span class="e">{eta_text(nxt[0][1])}</span></div>')
     return card(head + ("".join(rows) or '<div class="muted">今天已無班次（或尚未填寫班表）</div>'))
 
 

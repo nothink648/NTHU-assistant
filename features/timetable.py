@@ -20,11 +20,12 @@ NEW = "__new__"
 MODE_P, MODE_C = "依學校節次", "自訂時間"
 PERIOD_TIME = {label: (start, end) for label, start, end in PERIODS}
 PERIOD_LABELS = [p[0] for p in PERIODS]
-PALETTE = [  # (背景, 強調色)
-    ("#E8E6FF", "#6C63FF"), ("#FFE8EE", "#E5486F"), ("#E3F6EC", "#2E9E6A"),
-    ("#FFF1DC", "#E08A1E"), ("#E1F1FB", "#2C8BC9"), ("#F3E8FF", "#9B51E0"),
-    ("#FDF5CF", "#B89A0B"), ("#E0F5F3", "#1E9E94"),
-]
+PALETTE = ["#6C63FF", "#E5486F", "#2E9E6A", "#E08A1E", "#2C8BC9", "#9B51E0", "#B89A0B", "#1E9E94"]
+
+
+def _tint(hex_color: str, alpha: float = 0.22) -> str:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 # ---------- 資料邏輯（可被其他頁面重複使用） ----------
@@ -162,43 +163,91 @@ def _add_slots() -> None:
 
 
 # ---------- 課表格子 ----------
+def build_blocks(slots: list[dict]) -> list[dict]:
+    """把同一門課、同一天、節次相連（或重疊）的時段合併成一個方塊。
+
+    回傳 [{day, course_id, i0, i1, slots}]，i0 / i1 是 PERIODS 的列索引（含）。
+    """
+    per: dict[tuple, list] = {}
+    for s in slots:
+        hit = [i for i, (_, a, b) in enumerate(PERIODS) if overlaps(s["start"], s["end"], a, b)]
+        if hit:
+            per.setdefault((s["day"], s["course_id"]), []).append((hit[0], hit[-1], s))
+    blocks = []
+    for (day, cid), items in per.items():
+        cur = None
+        for i0, i1, s in sorted(items, key=lambda x: x[0]):
+            if cur and i0 <= cur["i1"] + 1:  # 相連 → 接在同一個方塊
+                cur["i1"] = max(cur["i1"], i1)
+                cur["slots"].append(s)
+            else:
+                cur = {"day": day, "course_id": cid, "i0": i0, "i1": i1, "slots": [s]}
+                blocks.append(cur)
+    return blocks
+
+
+def assign_lanes(day_blocks: list[dict]) -> None:
+    """不同課程時間重疊（衝突）時，讓它們左右並排而不是疊在一起。"""
+    groups: list[dict] = []
+    for b in sorted(day_blocks, key=lambda b: (b["i0"], b["i1"])):
+        if groups and b["i0"] <= groups[-1]["end"]:
+            groups[-1]["blocks"].append(b)
+            groups[-1]["end"] = max(groups[-1]["end"], b["i1"])
+        else:
+            groups.append({"blocks": [b], "end": b["i1"]})
+    for g in groups:
+        lane_end: list[int] = []
+        for b in g["blocks"]:
+            for k, e in enumerate(lane_end):
+                if b["i0"] > e:
+                    b["lane"], lane_end[k] = k, b["i1"]
+                    break
+            else:
+                b["lane"] = len(lane_end)
+                lane_end.append(b["i1"])
+        for b in g["blocks"]:
+            b["lanes"] = len(lane_end)
+
+
 def grid_html(data: dict) -> tuple[str, list[dict]]:
-    """回傳 (週課表 HTML, 對不到任何節次的時段)。"""
+    """回傳 (週課表 HTML, 對不到任何節次的時段)。用 CSS grid，相連的課會合成一個方塊。"""
     courses = {c["id"]: c for c in data["courses"]}
-    color = {c["id"]: PALETTE[i % len(PALETTE)] for i, c in enumerate(data["courses"])}
+    accent = {c["id"]: PALETTE[i % len(PALETTE)] for i, c in enumerate(data["courses"])}
     slots = [s for s in data["slots"] if s["course_id"] in courses]
     days = list(range(5)) + [d for d in (5, 6) if any(s["day"] == d for s in slots)]
+    col = {d: k + 2 for k, d in enumerate(days)}  # grid 欄號（第 1 欄是節次）
 
     orphans = [s for s in slots
                if not any(overlaps(s["start"], s["end"], a, b) for _, a, b in PERIODS)]
+    blocks = [b for b in build_blocks(slots) if b["day"] in col]
+    for d in days:
+        assign_lanes([b for b in blocks if b["day"] == d])
 
-    head = "<tr><th></th>" + "".join(f"<th>{WEEKDAYS[d]}</th>" for d in days) + "</tr>"
-    rows = []
+    cells = ['<div class="tt-h" style="grid-row:1;grid-column:1"></div>']
+    cells += [f'<div class="tt-h" style="grid-row:1;grid-column:{col[d]}">{WEEKDAYS[d]}</div>' for d in days]
     for i, (label, a, b) in enumerate(PERIODS):
-        tds = [f'<td class="tt-p">{esc(label)}<small>{a}<br>{b}</small></td>']
-        for d in days:
-            hits = [s for s in slots if s["day"] == d and overlaps(s["start"], s["end"], a, b)]
-            if not hits:
-                tds.append('<td class="tt-e"></td>')
-                continue
-            blocks = []
-            for s in hits:
-                bg, fg = color[s["course_id"]]
-                first = i == 0 or not overlaps(s["start"], s["end"], PERIODS[i - 1][1], PERIODS[i - 1][2])
-                if first:
-                    c = courses[s["course_id"]]
-                    lines = [f"<b>{esc(c['name'])}</b>"]
-                    if s.get("room"):
-                        lines.append(f"📍{esc(s['room'])}")
-                    if c.get("teacher"):
-                        lines.append(esc(c["teacher"]))
-                    inner = "<br>".join(lines)
-                else:
-                    inner = "&nbsp;"
-                blocks.append(f'<div class="tt-c" style="background:{bg};border-left:4px solid {fg}">{inner}</div>')
-            tds.append("<td>" + "".join(blocks) + "</td>")
-        rows.append("<tr>" + "".join(tds) + "</tr>")
-    return f'<div class="tt-wrap"><table class="tt">{head}{"".join(rows)}</table></div>', orphans
+        cells.append(f'<div class="tt-p" style="grid-row:{i + 2};grid-column:1">{esc(label)}'
+                     f'<small>{a}<br>{b}</small></div>')
+        cells += [f'<div class="tt-e" style="grid-row:{i + 2};grid-column:{col[d]}"></div>' for d in days]
+
+    for b in blocks:
+        c = courses[b["course_id"]]
+        color = accent[b["course_id"]]
+        rooms = list(dict.fromkeys(s["room"] for s in b["slots"] if s.get("room")))
+        lines = [f"<b>{esc(c['name'])}</b>"]
+        if rooms:
+            lines.append("📍" + esc(" / ".join(rooms)))
+        if c.get("teacher"):
+            lines.append(esc(c["teacher"]))
+        w = 100 / b["lanes"]
+        cells.append(
+            f'<div class="tt-c" style="grid-row:{b["i0"] + 2} / span {b["i1"] - b["i0"] + 1};'
+            f'grid-column:{col[b["day"]]};width:{w:.2f}%;margin-left:{b["lane"] * w:.2f}%;'
+            f'background:{_tint(color)};border-left:4px solid {color}">{"<br>".join(lines)}</div>')
+
+    grid_style = (f"grid-template-columns:62px repeat({len(days)},minmax(96px,1fr));"
+                  f"grid-template-rows:auto repeat({len(PERIODS)},minmax(46px,auto))")
+    return f'<div class="tt-wrap"><div class="ttg" style="{grid_style}">{"".join(cells)}</div></div>', orphans
 
 
 # ---------- 頁面 ----------
