@@ -2,12 +2,13 @@
 import streamlit as st
 
 from core.storage import load_json, save_json
+from core.ui import card, hero, html
 from features.base import Feature
 
 
 def render() -> None:
-    st.title("🧩 新功能標題")
-    st.write("在這裡寫你的功能。")
+    hero("新功能標題", "一句話說明這個功能", "🧩")
+    html(card('<div class="card-head"><span class="card-title">卡片標題</span></div>在這裡寫你的功能。'))
 
     # 範例：讀寫資料
     # items = load_json("my_data.json", [])

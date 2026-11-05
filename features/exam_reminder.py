@@ -4,11 +4,13 @@ from datetime import datetime
 
 import streamlit as st
 
+from config import WEEKDAYS
 from core.storage import load_json, save_json
+from core.ui import badge, esc, hero, html
 from features.base import Feature
 
 DATA_FILE = "exams.json"
-WARN_DAYS = 3  # 幾天內的考試用警告色標示
+WARN_DAYS = 3  # 幾天內的考試用警示色標示
 
 
 # ---------- 資料邏輯（可被其他頁面重複使用） ----------
@@ -41,9 +43,21 @@ def countdown_text(target: datetime, now: datetime | None = None) -> str:
     return f"{hours} 小時 {minutes} 分"
 
 
+def exam_card(exam: dict, now: datetime) -> str:
+    dt = exam_datetime(exam)
+    urgent = (dt - now).days < WARN_DAYS
+    place = f"　📍{esc(exam['place'])}" if exam.get("place") else ""
+    when = f"{dt:%Y/%m/%d}（{WEEKDAYS[dt.weekday()]}）{dt:%H:%M}"
+    tag = badge(f"⏳ 剩 {countdown_text(dt, now)}",
+                *(("#C2284F", "#FFE0E8") if urgent else ("#4B43D6", "#ECEAFF")))
+    return (f'<div class="card exam {"urgent" if urgent else ""}"><div class="card-head">'
+            f'<span class="card-title">{esc(exam["subject"])}</span>{tag}</div>'
+            f'<div class="muted">🗓️ {when}{place}</div></div>')
+
+
 # ---------- 頁面 ----------
 def render() -> None:
-    st.title("📅 考試提醒")
+    hero("考試提醒", "新增考試，隨時掌握倒數", "📅")
 
     with st.expander("➕ 新增考試", expanded=False):
         with st.form("add_exam", clear_on_submit=True):
@@ -52,7 +66,7 @@ def render() -> None:
             d = c1.date_input("日期")
             t = c2.time_input("時間")
             place = st.text_input("地點（選填）")
-            if st.form_submit_button("新增") and subject.strip():
+            if st.form_submit_button("新增", type="primary") and subject.strip():
                 exams = load_exams()
                 exams.append({
                     "id": uuid.uuid4().hex,
@@ -71,16 +85,9 @@ def render() -> None:
         return
 
     for exam in upcoming:
-        dt = exam_datetime(exam)
-        left = countdown_text(dt, now)
-        place = f"｜📍{exam['place']}" if exam.get("place") else ""
-        msg = f"**{exam['subject']}**　{dt:%Y/%m/%d (%a) %H:%M}{place}　⏳ 剩 {left}"
-
-        c1, c2 = st.columns([8, 1])
-        if (dt - now).days < WARN_DAYS:
-            c1.warning(msg)
-        else:
-            c1.info(msg)
+        c1, c2 = st.columns([10, 1], vertical_alignment="center")
+        with c1:
+            html(exam_card(exam, now))
         if c2.button("🗑️", key=f"del_{exam['id']}", help="刪除"):
             save_exams([e for e in load_exams() if e["id"] != exam["id"]])
             st.rerun()

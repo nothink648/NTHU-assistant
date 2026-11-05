@@ -1,0 +1,38 @@
+{
+  "courses": [
+    {
+      "id": "99d9da202bbd4a5eaecca7e90d9d12ed",
+      "name": "微積分",
+      "teacher": "",
+      "room": "",
+      "credits": 2.0,
+      "note": ""
+    }
+  ],
+  "slots": [
+    {
+      "id": "f392a0d2eff64fe8b7925183a4d0ae98",
+      "course_id": "99d9da202bbd4a5eaecca7e90d9d12ed",
+      "day": 0,
+      "periods": [
+        "1",
+        "2"
+      ],
+      "start": "08:00",
+      "end": "09:50",
+      "room": ""
+    },
+    {
+      "id": "603d687d239f425083d0ea88bfb4e9af",
+      "course_id": "99d9da202bbd4a5eaecca7e90d9d12ed",
+      "day": 2,
+      "periods": [
+        "1",
+        "1"
+      ],
+      "start": "08:00",
+      "end": "08:50",
+      "room": ""
+    }
+  ]
+}
