@@ -14,6 +14,7 @@ pages = [
     for f in FEATURES
 ]
 
+nav = st.navigation(pages)
 st.sidebar.title(f"{APP_ICON} {APP_TITLE}")
 st.sidebar.caption("🌓 淺色 / 深色 / 自動：右上角 ⋮ → Settings → Theme")
-st.navigation(pages).run()
+nav.run()

@@ -1,26 +1,18 @@
 {
   "courses": [
     {
-      "id": "99d9da202bbd4a5eaecca7e90d9d12ed",
+      "id": "fb1b1203b75946f0b9f701084a3a307b",
       "name": "微積分",
-      "teacher": "",
-      "room": "",
-      "credits": 2.0,
-      "note": ""
-    },
-    {
-      "id": "ff54171b7884489eb7440f8b475a19b0",
-      "name": "111",
-      "teacher": "",
-      "room": "",
+      "teacher": "小名",
+      "room": "110",
       "credits": 2.0,
       "note": ""
     }
   ],
   "slots": [
     {
-      "id": "f392a0d2eff64fe8b7925183a4d0ae98",
-      "course_id": "99d9da202bbd4a5eaecca7e90d9d12ed",
+      "id": "bccbd5b676e64d4b8e89efca26abb84f",
+      "course_id": "fb1b1203b75946f0b9f701084a3a307b",
       "day": 0,
       "periods": [
         "1",
@@ -28,31 +20,31 @@
       ],
       "start": "08:00",
       "end": "09:50",
-      "room": ""
+      "room": "110"
     },
     {
-      "id": "603d687d239f425083d0ea88bfb4e9af",
-      "course_id": "99d9da202bbd4a5eaecca7e90d9d12ed",
+      "id": "d2268e0ca00444e6bfeab24500ebcb68",
+      "course_id": "fb1b1203b75946f0b9f701084a3a307b",
       "day": 2,
       "periods": [
         "1",
-        "1"
+        "2"
       ],
       "start": "08:00",
-      "end": "08:50",
-      "room": ""
+      "end": "09:50",
+      "room": "110"
     },
     {
-      "id": "1478c7d8465548868f6b03ba688ec493",
-      "course_id": "ff54171b7884489eb7440f8b475a19b0",
-      "day": 3,
+      "id": "b1886d1c276743afb3dbdd4f627b4b30",
+      "course_id": "fb1b1203b75946f0b9f701084a3a307b",
+      "day": 4,
       "periods": [
-        "6",
-        "7"
+        "1",
+        "2"
       ],
-      "start": "14:20",
-      "end": "16:20",
-      "room": ""
+      "start": "08:00",
+      "end": "09:50",
+      "room": "110"
     }
   ]
 }

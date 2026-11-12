@@ -16,6 +16,8 @@ weekday 可以寫成「逗號或空格分隔的字串」，也可以寫成陣列
 目前公車只有平日；之後要加假日，在 SERVICE_DAYS 加 "weekend": "假日"，
 並在各方向補上 weekend 欄位即可。
 """
+from __future__ import annotations
+
 import json
 import re
 from datetime import datetime
@@ -24,16 +26,16 @@ import pandas as pd
 import streamlit as st
 
 from config import DATA_DIR
-from core.ui import badge, card, esc, hero, html
+from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 
 DATA_FILE = "bus_schedule.json"
 TIME_RE = re.compile(r"^(\d{1,2})[:：](\d{2})$")
 SERVICE_DAYS = {"weekday": "平日"}  # 目前有班次的日子
 DIR_ICONS = {"上山": "⬆️", "下山": "⬇️"}
-KINDS = {  # type -> (顯示文字, 文字色, 背景色)
-    "campus": ("校內", "#4B43D6", "#ECEAFF"),
-    "offcampus": ("校外", "#C25E00", "#FFF0DC"),
+KINDS = {  # type -> (顯示文字, 主色)
+    "campus": ("校內", "#6C63FF"),
+    "offcampus": ("校外", "#E08A1E"),
 }
 
 
@@ -120,8 +122,8 @@ def eta_text(mins: int) -> str:
 
 
 def kind_badge(route: dict) -> str:
-    text, fg, bg = KINDS.get(route.get("type", "campus"), KINDS["campus"])
-    return badge(text, fg, bg)
+    text, color = KINDS.get(route.get("type", "campus"), KINDS["campus"])
+    return badge(text, color)
 
 
 # ---------- 頁面 ----------
@@ -136,14 +138,14 @@ def route_card(route: dict, now: datetime, default_origin: str) -> str:
         parts.append(f'<div class="sub"><span>{icon} {esc(d.get("name", ""))}</span>'
                      f'<span class="muted">{origin}</span></div>')
         if not is_service_day(now):
-            parts.append('<div class="muted">假日無班次</div>')
+            parts.append(empty("🛌", "假日無班次"))
         elif not parse_times(d.get("weekday", [])):
-            parts.append('<div class="muted">尚未填寫班表</div>')
+            parts.append(empty("📝", "尚未填寫班表"))
         else:
             nxt = get_next_buses(d, now)
             parts.append("".join(f'<div class="row"><span class="t">{hhmm}</span>'
                                  f'<span class="e">{eta_text(m)}</span></div>' for hhmm, m in nxt)
-                         or '<div class="muted">今天已無班次</div>')
+                         or empty("🌃", "今天已無班次"))
     return card(head + note + "".join(parts))
 
 

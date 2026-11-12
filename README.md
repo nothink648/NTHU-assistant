@@ -3,8 +3,9 @@
 ## 執行
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+python -m streamlit run app.py
 ```
+建議用 `python -m streamlit`，確保 Streamlit 跑在你安裝套件的那個 Python 上（電腦裡同時有 Anaconda 與一般 Python 時，直接打 `streamlit` 可能會用到另一個版本）。需要 Python 3.9 以上。
 
 ## 功能
 - 🏠 首頁：下一場考試、最近公車、今日課程

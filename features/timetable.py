@@ -5,6 +5,8 @@
   slots  ：上課時段（哪一門課、星期幾、起訖時間）；一門課可以有很多個時段
 節次時間定義在 config.py 的 PERIODS。
 """
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, time
 
@@ -157,6 +159,7 @@ def _add_slots() -> None:
 
     ss.tt_course = course["id"]  # 之後再填同一門課的其他時段更方便
     if added:
+        ss.tt_days = []  # 清空星期，避免重複按到又加一次
         ss.tt_msgs.append(("success", f"已新增「{name}」：{'、'.join(added)} {start}–{end}"))
     for n in notes:
         ss.tt_msgs.append(("warning", n))
@@ -224,13 +227,15 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
         assign_lanes([b for b in blocks if b["day"] == d])
 
     cells = ['<div class="tt-h" style="grid-row:1;grid-column:1"></div>']
-    cells += [f'<div class="tt-h" style="grid-row:1;grid-column:{col[d]}">{WEEKDAYS[d]}</div>' for d in days]
+    today = datetime.now().weekday()
+    cells += [f'<div class="tt-h{" today" if d == today else ""}" style="grid-row:1;grid-column:{col[d]}">'
+              f'{WEEKDAYS[d]}</div>' for d in days]
     for i, (label, a, b) in enumerate(PERIODS):
         cells.append(f'<div class="tt-p" style="grid-row:{i + 2};grid-column:1">{esc(label)}'
                      f'<small>{a}<br>{b}</small></div>')
         cells += [f'<div class="tt-e" style="grid-row:{i + 2};grid-column:{col[d]}"></div>' for d in days]
 
-    for b in blocks:
+    for n, b in enumerate(sorted(blocks, key=lambda b: (b["day"], b["i0"]))):
         c = courses[b["course_id"]]
         color = accent[b["course_id"]]
         rooms = list(dict.fromkeys(s["room"] for s in b["slots"] if s.get("room")))
@@ -243,7 +248,8 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
         cells.append(
             f'<div class="tt-c" style="grid-row:{b["i0"] + 2} / span {b["i1"] - b["i0"] + 1};'
             f'grid-column:{col[b["day"]]};width:{w:.2f}%;margin-left:{b["lane"] * w:.2f}%;'
-            f'background:{_tint(color)};border-left:4px solid {color}">{"<br>".join(lines)}</div>')
+            f'background:{_tint(color)};border-left:4px solid {color};--d:{min(n, 12) * 0.04:.2f}s"'
+            f' title="{esc(c["name"])}　{esc(c.get("note", ""))}">{"<br>".join(lines)}</div>')
 
     grid_style = (f"grid-template-columns:62px repeat({len(days)},minmax(96px,1fr));"
                   f"grid-template-rows:auto repeat({len(PERIODS)},minmax(46px,auto))")
@@ -269,46 +275,50 @@ def _tab_overview(data: dict) -> None:
 
 def _tab_add(data: dict) -> None:
     ss = st.session_state
+    names = {c["id"]: c["name"] for c in data["courses"]}
+    options = [NEW] + sorted(names, key=lambda i: names[i].casefold())
+    if ss.tt_course not in options:
+        ss.tt_course = NEW
+
+    with st.container(border=True):
+        st.markdown("**📘 課程資料**")
+        st.selectbox("選擇已填過的課程（會自動帶入資料）", options, key="tt_course",
+                     format_func=lambda i: "➕ 新課程" if i == NEW else names[i],
+                     on_change=_on_course_change)
+        c1, c2 = st.columns([3, 1])
+        c1.text_input("課程名稱", key="tt_name", placeholder="例如：微積分")
+        c2.number_input("學分", min_value=0.0, max_value=12.0, step=1.0, format="%g", key="tt_credits")
+        c3, c4 = st.columns(2)
+        c3.text_input("授課教授", key="tt_teacher")
+        c4.text_input("教室", key="tt_room")
+        st.text_input("備註（選填）", key="tt_note")
+
+    with st.container(border=True):
+        st.markdown("**🕘 上課時段**")
+        st.multiselect("星期（可複選，同節次的多天一次加入）", list(range(7)), key="tt_days",
+                       format_func=WEEKDAYS.__getitem__, placeholder="選擇星期")
+        st.radio("時段類型", [MODE_P, MODE_C], key="tt_mode", horizontal=True)
+        if ss.tt_mode == MODE_P:
+            fmt = lambda p: f"第 {p} 節　{PERIOD_TIME[p][0]}–{PERIOD_TIME[p][1]}"
+            s1, s2 = st.columns(2)
+            s1.selectbox("開始節次", PERIOD_LABELS, key="tt_p_start", format_func=fmt,
+                         on_change=_on_start_change)
+            s2.selectbox("結束節次", PERIOD_LABELS, key="tt_p_end", format_func=fmt)
+            if PERIOD_LABELS.index(ss.tt_p_end) >= PERIOD_LABELS.index(ss.tt_p_start):
+                st.caption(f"⏰ {PERIOD_TIME[ss.tt_p_start][0]}–{PERIOD_TIME[ss.tt_p_end][1]}")
+        else:
+            t1, t2 = st.columns(2)
+            t1.time_input("開始時間", key="tt_c_start", step=300)
+            t2.time_input("結束時間", key="tt_c_end", step=300)
+
+    st.button("➕ 新增這個時段", type="primary", on_click=_add_slots)
+
+    # 訊息顯示在按鈕正下方，按下去立刻看得到結果
     msgs, ss.tt_msgs = ss.tt_msgs, []
     for kind, text in msgs:
         if kind == "success":
             st.toast(text, icon="✅")
         getattr(st, kind)(text)
-
-    names = {c["id"]: c["name"] for c in data["courses"]}
-    options = [NEW] + sorted(names, key=lambda i: names[i].casefold())
-    if ss.tt_course not in options:
-        ss.tt_course = NEW
-    st.selectbox("選擇已填過的課程（會自動帶入資料）", options, key="tt_course",
-                 format_func=lambda i: "➕ 新課程" if i == NEW else names[i],
-                 on_change=_on_course_change)
-
-    c1, c2 = st.columns([3, 1])
-    c1.text_input("課程名稱", key="tt_name", placeholder="例如：微積分")
-    c2.number_input("學分", min_value=0.0, max_value=12.0, step=1.0, format="%g", key="tt_credits")
-    c3, c4 = st.columns(2)
-    c3.text_input("授課教授", key="tt_teacher")
-    c4.text_input("教室", key="tt_room")
-    st.text_input("備註（選填）", key="tt_note")
-
-    st.divider()
-    st.multiselect("星期（可複選，同節次的多天一次加入）", list(range(7)), key="tt_days",
-                   format_func=WEEKDAYS.__getitem__, placeholder="選擇星期")
-    st.radio("時段類型", [MODE_P, MODE_C], key="tt_mode", horizontal=True)
-    if ss.tt_mode == MODE_P:
-        fmt = lambda p: f"第 {p} 節　{PERIOD_TIME[p][0]}–{PERIOD_TIME[p][1]}"
-        s1, s2 = st.columns(2)
-        s1.selectbox("開始節次", PERIOD_LABELS, key="tt_p_start", format_func=fmt,
-                     on_change=_on_start_change)
-        s2.selectbox("結束節次", PERIOD_LABELS, key="tt_p_end", format_func=fmt)
-        if PERIOD_LABELS.index(ss.tt_p_end) >= PERIOD_LABELS.index(ss.tt_p_start):
-            st.caption(f"⏰ {PERIOD_TIME[ss.tt_p_start][0]}–{PERIOD_TIME[ss.tt_p_end][1]}")
-    else:
-        t1, t2 = st.columns(2)
-        t1.time_input("開始時間", key="tt_c_start", step=300)
-        t2.time_input("結束時間", key="tt_c_end", step=300)
-
-    st.button("➕ 新增這個時段", type="primary", on_click=_add_slots)
     st.caption("選已填過的課程時，修改教授 / 學分 / 備註會一併更新該課程；想改課程名稱請到「課程管理」。")
 
 
