@@ -79,13 +79,16 @@ hr{border-color:var(--line)!important}
 [data-baseweb="tag"],[data-testid="stMultiSelectTagsContainer"] [role="group"]>span{background:var(--acc)!important;animation:popIn .25s var(--spring) both}
 label[data-testid="stRadioOption"]:has(input:checked)>div:first-of-type>div:not([data-testid]),
 [data-baseweb="radio"]:has(input:checked)>div:first-of-type{background:var(--acc)!important;border-color:var(--acc)!important}
-[data-baseweb="checkbox"]:has(input:checked) span:not([data-testid]):first-of-type{background-color:var(--acc)!important;border-color:var(--acc)!important}
+[data-testid="stCheckbox"] label:has(input:checked)>div:first-of-type,
+[data-testid="stCheckbox"] label:has(input:checked)>span:first-of-type{background-color:var(--acc)!important;border-color:var(--acc)!important}
 [data-testid="stExpander"] details{border-radius:14px;border-color:var(--line);transition:border-color .2s,box-shadow .2s}
 [data-testid="stExpander"] details:hover{border-color:var(--acc-line)}
 [data-testid="stExpander"] details[open]{box-shadow:0 6px 20px rgba(108,99,255,.08)}
 [data-testid="stVerticalBlockBorderWrapper"]:has(>div>[data-testid="stVerticalBlock"]){border-radius:16px}
 [data-testid="stMetric"]{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px;animation:popIn .4s var(--ease) both}
 [data-testid="stMetricValue"]{color:var(--acc-text)}
+iframe[title="st.iframe"],[data-testid="stIFrame"]{border-radius:16px;border:1px solid var(--line)!important;
+  box-shadow:0 10px 28px rgba(108,99,255,.12);animation:fadeUp .5s var(--ease) both;background:var(--surface)}
 
 /* ---------- 頁首 Hero ---------- */
 .hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:18px;padding:22px 26px;margin-bottom:8px;border-radius:20px;
@@ -129,6 +132,9 @@ label[data-testid="stRadioOption"]:has(input:checked)>div:first-of-type>div:not(
 .progress>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc3));transform-origin:left;animation:barGrow .8s var(--ease) both}
 
 /* ---------- 考試 ---------- */
+.line-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:middle;flex:none}
+.line-dot.sm{width:9px;height:9px;margin-right:6px}
+.card.route{border-top-left-radius:14px;border-top-right-radius:14px}
 .exam{border-left:5px solid var(--acc)}
 .exam.urgent{border-left-color:#E5486F;background:rgba(229,72,111,.07)}
 .exam.urgent .badge{animation:pulse 2s ease-in-out infinite}
@@ -148,7 +154,7 @@ label[data-testid="stRadioOption"]:has(input:checked)>div:first-of-type>div:not(
 .tt-p small{display:block;opacity:.6;font-size:.62rem;line-height:1.15;font-weight:400}
 .tt-e{background:rgba(127,127,127,.04)}
 .ttg>.tt-c{justify-self:start;width:100%;padding:6px 8px;font-size:.78rem;line-height:1.35;overflow:hidden;
-  animation:popIn .4s var(--ease) both;animation-delay:var(--d,0s);transition:transform .2s var(--ease),box-shadow .2s;cursor:default}
+  animation:popIn .4s var(--ease) both;transition:transform .2s var(--ease),box-shadow .2s;cursor:default}
 .ttg>.tt-c:hover{transform:scale(1.03);box-shadow:0 6px 16px rgba(0,0,0,.12);z-index:2}
 .tt-c b{font-size:.86rem}
 
@@ -178,7 +184,10 @@ def hero(title: str, subtitle: str = "", icon: str = "") -> None:
 def badge(text: str, color: str = ACCENT, live: bool = False) -> str:
     """膠囊標籤。只需給一個主色，淺色 / 深色主題會自動調整明暗。"""
     cls = "badge live" if live else "badge"
-    return f'<span class="{cls}" style="--c:{color}">{esc(text)}</span>'
+    # 直接寫入顏色（舊版 Streamlit 會濾掉 inline 的 CSS 變數）；color-mix 搭配 currentColor 讓深色主題自動變亮
+    style = (f"color:color-mix(in srgb,{color} 78%,currentColor);"
+             f"background:color-mix(in srgb,{color} 15%,transparent)")
+    return f'<span class="{cls}" style="{style}">{esc(text)}</span>'
 
 
 def card(inner: str, cls: str = "") -> str:

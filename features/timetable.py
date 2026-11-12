@@ -57,6 +57,21 @@ def find_course(data: dict, course_id: str) -> dict | None:
     return next((c for c in data["courses"] if c["id"] == course_id), None)
 
 
+def course_colors(data: dict) -> dict[str, str]:
+    """每門課的代表色（課表方塊、考試卡片共用同一個顏色）。"""
+    return {c["id"]: PALETTE[i % len(PALETTE)] for i, c in enumerate(data["courses"])}
+
+
+def exams_by_course(now: datetime | None = None) -> dict[str, list[dict]]:
+    """{課程 id: [即將到來、有連結這門課的考試]}（延遲 import，避免和考試頁互相 import）。"""
+    from features.exam_reminder import get_upcoming_exams
+    result: dict[str, list[dict]] = {}
+    for e in get_upcoming_exams(now):
+        if e.get("course_id"):
+            result.setdefault(e["course_id"], []).append(e)
+    return result
+
+
 def slot_label(slot: dict) -> str:
     p = slot.get("periods")
     if p:
@@ -215,8 +230,9 @@ def assign_lanes(day_blocks: list[dict]) -> None:
 def grid_html(data: dict) -> tuple[str, list[dict]]:
     """回傳 (週課表 HTML, 對不到任何節次的時段)。用 CSS grid，相連的課會合成一個方塊。"""
     courses = {c["id"]: c for c in data["courses"]}
-    accent = {c["id"]: PALETTE[i % len(PALETTE)] for i, c in enumerate(data["courses"])}
-    slots = [s for s in data["slots"] if s["course_id"] in courses]
+    accent = course_colors(data)
+    exams = exams_by_course()
+    slots =[s for s in data["slots"] if s["course_id"] in courses]
     days = list(range(5)) + [d for d in (5, 6) if any(s["day"] == d for s in slots)]
     col = {d: k + 2 for k, d in enumerate(days)}  # grid 欄號（第 1 欄是節次）
 
@@ -244,11 +260,14 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
             lines.append("📍" + esc(" / ".join(rooms)))
         if c.get("teacher"):
             lines.append(esc(c["teacher"]))
+        if exams.get(b["course_id"]):  # 連結到這門課的下一場考試
+            e = exams[b["course_id"]][0]
+            lines.append(f'<span style="color:#E5486F;font-weight:600">📝 考試 {e["datetime"][5:10].replace("-", "/")}</span>')
         w = 100 / b["lanes"]
         cells.append(
             f'<div class="tt-c" style="grid-row:{b["i0"] + 2} / span {b["i1"] - b["i0"] + 1};'
             f'grid-column:{col[b["day"]]};width:{w:.2f}%;margin-left:{b["lane"] * w:.2f}%;'
-            f'background:{_tint(color)};border-left:4px solid {color};--d:{min(n, 12) * 0.04:.2f}s"'
+            f'background:{_tint(color)};border-left:4px solid {color};animation-delay:{min(n, 12) * 0.04:.2f}s"'
             f' title="{esc(c["name"])}　{esc(c.get("note", ""))}">{"<br>".join(lines)}</div>')
 
     grid_style = (f"grid-template-columns:62px repeat({len(days)},minmax(96px,1fr));"
@@ -261,10 +280,6 @@ def _tab_overview(data: dict) -> None:
     if not data["courses"]:
         st.info("還沒有課程，到「➕ 新增時段」填入第一門課吧！")
         return
-    c1, c2, c3 = st.columns(3)
-    c1.metric("課程數", len(data["courses"]))
-    c2.metric("總學分", f"{sum(float(c.get('credits', 0)) for c in data['courses']):g}")
-    c3.metric("每週上課時段", len(data["slots"]))
     table, orphans = grid_html(data)
     html(table)
     if orphans:
@@ -326,11 +341,16 @@ def _tab_manage(data: dict) -> None:
     if not data["courses"]:
         st.info("還沒有課程。")
         return
+    exams = exams_by_course()
     for c in sorted(data["courses"], key=lambda c: c["name"].casefold()):
         cid = c["id"]
         mine = sorted((s for s in data["slots"] if s["course_id"] == cid),
                       key=lambda s: (s["day"], to_min(s["start"])))
-        with st.expander(f"{c['name']}　·　{float(c.get('credits', 0)):g} 學分　·　{len(mine)} 個時段"):
+        n_exam = f"　·　📝 {len(exams[cid])} 場考試" if exams.get(cid) else ""
+        with st.expander(f"{c['name']}　·　{float(c.get('credits', 0)):g} 學分　·　{len(mine)} 個時段{n_exam}"):
+            for e in exams.get(cid, []):
+                place = f"　📍{e['place']}" if e.get("place") else ""
+                st.markdown(f"📝 **{e['subject']}**　{e['datetime'][:16].replace('T', ' ')}{place}")
             with st.form(f"edit_{cid}"):
                 f1, f2 = st.columns([3, 1])
                 name = f1.text_input("課程名稱", c["name"])

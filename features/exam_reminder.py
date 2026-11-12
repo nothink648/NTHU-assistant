@@ -1,4 +1,8 @@
-"""📅 考試提醒：新增 / 刪除考試，並顯示倒數時間。"""
+"""📅 考試提醒：新增 / 刪除考試，並顯示倒數時間。
+
+考試可以連結課表裡的科目（exam["course_id"]），卡片會顯示該課程的顏色與教授，
+課表上也會標出這門課的考試。
+"""
 from __future__ import annotations
 
 import re
@@ -11,6 +15,7 @@ from config import WEEKDAYS
 from core.storage import load_json, save_json
 from core.ui import badge, esc, hero, html
 from features.base import Feature
+from features.timetable import course_colors, load_data as load_timetable
 
 DATA_FILE = "exams.json"
 WARN_DAYS = 3  # 幾天內的考試用警示色標示
@@ -56,7 +61,18 @@ def countdown_text(target: datetime, now: datetime | None = None) -> str:
     return f"{hours} 小時 {minutes} 分"
 
 
-def exam_card(exam: dict, now: datetime) -> str:
+def course_html(exam: dict, timetable: dict | None = None) -> str:
+    """連結的課表科目：課程色標籤 + 教授。課程被刪掉就不顯示。"""
+    timetable = timetable or load_timetable()
+    course = next((c for c in timetable["courses"] if c["id"] == exam.get("course_id")), None)
+    if not course:
+        return ""
+    teacher = f'<span class="muted">　👤 {esc(course["teacher"])}</span>' if course.get("teacher") else ""
+    return (f'<div style="margin:2px 0 4px">{badge("📚 " + course["name"], course_colors(timetable)[course["id"]])}'
+            f'{teacher}</div>')
+
+
+def exam_card(exam: dict, now: datetime, timetable: dict | None = None) -> str:
     dt = exam_datetime(exam)
     urgent = (dt - now).days < WARN_DAYS
     place = f"　📍{esc(exam['place'])}" if exam.get("place") else ""
@@ -64,7 +80,7 @@ def exam_card(exam: dict, now: datetime) -> str:
     tag = badge(f"⏳ 剩 {countdown_text(dt, now)}", "#E5486F" if urgent else "#6C63FF")
     return (f'<div class="card exam {"urgent" if urgent else ""}"><div class="card-head">'
             f'<span class="card-title">{esc(exam["subject"])}</span>{tag}</div>'
-            f'<div class="muted">🗓️ {when}{place}</div>{links_html(exam)}</div>')
+            f'{course_html(exam, timetable)}<div class="muted">🗓️ {when}{place}</div>{links_html(exam)}</div>')
 
 
 def parse_links(text: str) -> tuple[list[str], list[str]]:
@@ -98,31 +114,43 @@ def links_html(exam: dict) -> str:
 def render() -> None:
     hero("考試提醒", "新增考試，隨時掌握倒數", "📅")
 
+    timetable = load_timetable()
+    courses = {c["id"]: c for c in timetable["courses"]}
+    course_opts = [""] + sorted(courses, key=lambda i: courses[i]["name"].casefold())
+    course_fmt = lambda i: courses[i]["name"] if i in courses else (i or "不連結（自行輸入科目）")
+
     with st.expander("➕ 新增考試", expanded=False):
         with st.form("add_exam", clear_on_submit=True):
-            subject = st.text_input("科目", placeholder="例如：微積分期中考")
+            cid = st.selectbox("課表科目（選填）", course_opts, format_func=course_fmt,
+                               help="連結後，考試卡片會顯示課程顏色與教授，課表上也會標出這場考試")
+            subject = st.text_input("考試名稱", placeholder="例如：期中考（有選課表科目時，會自動加上科目名稱）")
             c1, c2 = st.columns(2)
             d = c1.date_input("日期")
             t = c2.time_input("時間", step=300)
-            place = st.text_input("地點（選填）")
+            place = st.text_input("地點（選填，連結科目時留空會用上課教室）")
             links_raw = st.text_area("歷屆考古題連結（選填，一行一個）", height=90,
                                      placeholder="https://drive.google.com/...\nhttps://...")
             if st.form_submit_button("新增", type="primary"):
                 when = datetime.combine(d, t)
                 links, bad = parse_links(links_raw)
-                if not subject.strip():
-                    st.warning("請輸入科目名稱")
+                course = courses.get(cid)
+                subject = subject.strip()
+                if course and course["name"] not in subject:
+                    subject = f"{course['name']} {subject or '考試'}"
+                place = place.strip() or (course.get("room", "") if course else "")
+                if not subject:
+                    st.warning("請選擇課表科目或輸入考試名稱")
                 elif when < datetime.now():
                     st.warning("這個時間已經過了，請確認日期與時間")
                 elif bad:
                     st.warning("以下連結格式不正確（需以 http:// 或 https:// 開頭）：" + "、".join(bad))
                 else:
                     exams = load_exams()
-                    exams.append({"id": uuid.uuid4().hex, "subject": subject.strip(),
-                                  "datetime": when.isoformat(), "place": place.strip(),
-                                  "links": links})
+                    exams.append({"id": uuid.uuid4().hex, "subject": subject,
+                                  "datetime": when.isoformat(), "place": place,
+                                  "links": links, "course_id": cid if course else ""})
                     save_exams(exams)
-                    st.toast(f"已新增：{subject.strip()}", icon="✅")
+                    st.toast(f"已新增：{subject}", icon="✅")
 
     now = datetime.now()
     upcoming = get_upcoming_exams(now)
@@ -133,10 +161,24 @@ def render() -> None:
 
     st.caption(f"共 {len(upcoming)} 場即將到來　·　{WARN_DAYS} 天內的考試會以紅色標示")
     for exam in upcoming:
-        c1, c2 = st.columns([12, 1], vertical_alignment="center")
+        c1, c2, c3 = st.columns([12, 1, 1], vertical_alignment="center")
         with c1:
-            html(exam_card(exam, now))
-        c2.button("🗑️", key=f"del_{exam['id']}", help="刪除", on_click=_delete, args=(exam,))
+            html(exam_card(exam, now, timetable))
+        with c2.popover("🔗", help="連結課表科目"):
+            cur = exam.get("course_id") if exam.get("course_id") in courses else ""
+            st.selectbox("課表科目", course_opts, index=course_opts.index(cur), format_func=course_fmt,
+                         key=f"link_{exam['id']}", on_change=_relink, args=(exam,))
+        c3.button("🗑️", key=f"del_{exam['id']}", help="刪除", on_click=_delete, args=(exam,))
+
+
+def _relink(exam: dict) -> None:
+    cid = st.session_state.get(f"link_{exam['id']}", "")
+    exams = load_exams()
+    for e in exams:
+        if e.get("id") == exam["id"]:
+            e["course_id"] = cid
+    save_exams(exams)
+    st.toast("已更新連結的課表科目", icon="🔗")
 
 
 def _delete(exam: dict) -> None:

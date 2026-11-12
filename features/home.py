@@ -8,8 +8,10 @@ import streamlit as st
 from config import APP_ICON, APP_TITLE, WEEKDAYS
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
-from features.bus_schedule import eta_text, get_directions, get_next_buses, is_service_day, load_bus_data
-from features.exam_reminder import WARN_DAYS, countdown_text, exam_datetime, get_upcoming_exams, links_html
+from features.bus_schedule import (eta_text, get_directions, get_next_buses, is_service_day, load_bus_data,
+                                   mark_html, route_color)
+from features.exam_reminder import (WARN_DAYS, countdown_text, course_html, exam_datetime,
+                                   get_upcoming_exams, links_html)
 from features.timetable import to_min, today_classes
 
 
@@ -35,7 +37,7 @@ def exam_summary(now: datetime) -> str:
     dt = exam_datetime(e)
     urgent = (dt - now).days < WARN_DAYS
     more = f'<div class="muted" style="margin-top:6px">之後還有 {len(exams) - 1} 場</div>' if len(exams) > 1 else ""
-    return card(head + f'<div class="big">{esc(e["subject"])}</div>'
+    return card(head + f'<div class="big">{esc(e["subject"])}</div>{course_html(e)}'
                 f'<div style="margin:4px 0">{badge("⏳ 剩 " + countdown_text(dt, now), "#E5486F" if urgent else "#6C63FF")}</div>'
                 f'<div class="muted">🗓️ {dt:%Y/%m/%d}（{WEEKDAYS[dt.weekday()]}）{dt:%H:%M}</div>{more}'
                 f'{links_html(e)}',
@@ -53,7 +55,9 @@ def bus_summary(now: datetime) -> str:
             nxt = get_next_buses(d, now, n=1)
             if nxt:
                 label = r.get("name", "") + ("" if d.get("name") == "發車" else f"・{d.get('name', '')}")
-                rows.append(f'<div class="row"><span class="t">{esc(label)}　{nxt[0][0]}</span>'
+                c = route_color(r)
+                dot = f'<span class="line-dot sm" style="background:{c}"></span>'
+                rows.append(f'<div class="row"><span class="t">{dot}{esc(label)}　{nxt[0][0]}{mark_html(nxt[0][2])}</span>'
                             f'<span class="e">{eta_text(nxt[0][1])}</span></div>')
     return card(head + ("".join(rows) or empty("🌃", "今天已無班次")))
 
