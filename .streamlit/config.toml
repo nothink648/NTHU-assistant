@@ -1,2 +1,6 @@
 # 刻意不設定 [theme]：讓 Streamlit 內建選單可切換「淺色 / 深色 / 跟隨系統」
 # 切換方式：右上角 ⋮ → Settings → Theme
+
+[server]
+# 讓 static/ 資料夾（自訂 icon）可以用 /app/static/... 網址讀取
+enableStaticServing = true

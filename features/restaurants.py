@@ -20,6 +20,7 @@ from datetime import date, datetime
 import streamlit as st
 
 from core.storage import load_json, save_json
+from core.icons import has, icon
 from core.ui import badge, esc, hero, html
 from features.base import Feature
 
@@ -55,10 +56,10 @@ _CSS = """
 .fweek b{font-weight:600;opacity:.85;margin-right:4px}
 .fnote{font-size:.78rem;color:#E5486F;opacity:.9}
 .fphone{font-size:.76rem;opacity:.55}
-.card.is-off{opacity:.6}
-.card.is-off:hover{opacity:1}
+.card.is-off>*{opacity:.6;transition:opacity .2s}
+.card.is-off:hover>*{opacity:1}
 
-.reel-win{position:relative;height:%(win)spx;overflow:hidden;border-radius:18px;border:1px solid var(--line);background:var(--surface);
+.reel-win{position:relative;height:%(win)spx;overflow:hidden;border-radius:18px;border:1px solid var(--line);background:var(--card-bg);
   -webkit-mask-image:linear-gradient(transparent,#000 28%%,#000 72%%,transparent);mask-image:linear-gradient(transparent,#000 28%%,#000 72%%,transparent)}
 .reel-frame{position:absolute;left:10px;right:10px;top:%(row)spx;height:%(row)spx;border-radius:14px;border:2px solid var(--acc);
   background:var(--acc-soft);box-shadow:0 0 0 4px rgba(108,99,255,.08);z-index:0}
@@ -72,7 +73,11 @@ _CSS = """
 .reel-win:not(.anim) .win{color:var(--acc-text)}
 .spin-result{margin-top:14px}
 .spin-result.anim{animation:popIn .5s var(--spring) %(dur2)ss both}
-.spin-result .card{border:1.5px solid var(--acc-line);background:linear-gradient(135deg,rgba(108,99,255,.10),rgba(179,157,255,.06))}
+/* 轉盤按鈕前的骰子 icon（本頁只有這一個主要按鈕） */
+:is([data-testid="stBaseButton-primary"],[data-testid="baseButton-primary"]) p::before{content:"";display:inline-block;width:1.1em;height:1.1em;
+  margin-right:6px;vertical-align:-.18em;background:currentColor;-webkit-mask:url(/app/static/icons/dice.png) center/contain no-repeat;
+  mask:url(/app/static/icons/dice.png) center/contain no-repeat}
+.spin-result .card{border:1.5px solid var(--acc-line);background:linear-gradient(135deg,rgba(108,99,255,.10),rgba(179,157,255,.06)),var(--solid)}
 </style>
 """ % {"win": ROW_PX * 3, "row": ROW_PX, "dur": SPIN_SECONDS, "dur2": SPIN_SECONDS + 0.1}
 
@@ -289,7 +294,7 @@ def restaurant_card(r: dict, st_: dict, extra_cls: str = "") -> str:
     phone = f'<div class="fphone">☎ {esc(r["phone"])}</div>' if r.get("phone") else ""
     off = "" if st_["is_open"] else "is-off"
     return (f'<div class="card {off} {extra_cls}"><div class="fhead">{img}<div>'
-            f'<div class="fname">{esc(r["name"])}</div><div class="farea">📍 {area}</div></div></div>'
+            f'<div class="fname">{esc(r["name"])}</div><div class="farea">{icon("pin")} {area}</div></div></div>'
             f'<div>{badge(st_["label"], STATUS_STYLE[st_["key"]], live=st_["is_open"])}</div>'
             f'<div class="ftoday">今日　{esc(st_["today"])}</div>'
             f'<div class="fweek">{week_lines(r)}</div>{note}{phone}</div>')
@@ -330,7 +335,7 @@ def reel_html(spin: dict, animate: bool) -> str:
 def _roulette(rests: list[dict], stats: dict[str, dict], buildings: list[str]) -> None:
     ss = st.session_state
     with st.container(border=True):
-        st.markdown("**🎲 今天吃什麼？**　讓轉盤幫你決定")
+        html(f'<div style="font-weight:700">{icon("dice")} 今天吃什麼？<span class="muted">　讓轉盤幫你決定</span></div>')
         c1, c2 = st.columns([3, 2], vertical_alignment="bottom")
         picked = c1.multiselect("抽選範圍", buildings, default=buildings, key="food_areas",
                                 placeholder="全部區域")
@@ -338,7 +343,7 @@ def _roulette(rests: list[dict], stats: dict[str, dict], buildings: list[str]) -
         areas = set(picked or buildings)
         cands = [r for r in rests if r["is_food"] and r["building"] in areas
                  and (not only_open or stats[r["id"]]["is_open"])]
-        st.button(f"🎲 隨機選一間（{len(cands)} 間候選）", type="primary", on_click=_spin, args=(cands,),
+        st.button(f"{'' if has('dice') else '🎲 '}隨機選一間（{len(cands)} 間候選）", type="primary", on_click=_spin, args=(cands,),
                   disabled=not cands, key="food_spin_btn")
         if not cands:
             st.caption("目前沒有符合條件的餐廳，試著關掉「只抽現在營業中的」或放寬範圍。")
@@ -356,7 +361,7 @@ def _roulette(rests: list[dict], stats: dict[str, dict], buildings: list[str]) -
 # ---------- 頁面 ----------
 def render() -> None:
     html(_CSS)
-    hero("校園餐廳", "營業時間一覽　·　選擇困難就交給轉盤", "🍱")
+    hero("校園餐廳", "營業時間一覽　·　選擇困難就交給轉盤", "food")
     if "food_flash" in st.session_state:
         st.toast(st.session_state.pop("food_flash"), icon="✅")
     data = load_data()
@@ -372,7 +377,7 @@ def render() -> None:
 
         n_open = sum(stats[r["id"]]["is_open"] for r in rests if r["is_food"])
         n_food = sum(r["is_food"] for r in rests)
-        st.markdown(f"#### 🕘 營業時間　{badge(f'現在營業 {n_open} / {n_food} 間餐廳', '#2E9E6A', live=n_open > 0)}",
+        st.markdown(f"#### {icon('clock') or '🕘'} 營業時間　{badge(f'現在營業 {n_open} / {n_food} 間餐廳', '#2E9E6A', live=n_open > 0)}",
                     unsafe_allow_html=True)
         f1, f2, f3 = st.columns([3, 1.3, 1.3], vertical_alignment="bottom")
         q = f1.text_input("搜尋", placeholder="店名或位置，例如：咖哩、風雲2樓", key="food_q",
@@ -419,4 +424,4 @@ def render() -> None:
                 st.error(f"更新失敗：{e}")
 
 
-FEATURE = Feature(title="校園餐廳", icon="🍱", render=render, slug="food")
+FEATURE = Feature(title="校園餐廳", icon="🍱", render=render, slug="food", ico="food")

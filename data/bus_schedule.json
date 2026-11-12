@@ -38,18 +38,6 @@
       ]
     },
     {
-      "name": "校外線",
-      "type": "offcampus",
-      "note": "暫不處理",
-      "directions": [
-        {
-          "name": "發車",
-          "origin": "校門口",
-          "weekday": ""
-        }
-      ]
-    },
-    {
       "name": "南大線一",
       "type": "nanda",
       "color": "#2F7FD8",

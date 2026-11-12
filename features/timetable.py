@@ -13,7 +13,8 @@ from datetime import datetime, time
 import streamlit as st
 
 from config import PERIODS, WEEKDAYS
-from core.storage import load_json, save_json
+from core.storage import load_user_json, save_user_json
+from core.icons import icon
 from core.ui import esc, hero, html
 from features.base import Feature
 
@@ -32,7 +33,7 @@ def _tint(hex_color: str, alpha: float = 0.22) -> str:
 
 # ---------- 資料邏輯（可被其他頁面重複使用） ----------
 def load_data() -> dict:
-    data = load_json(DATA_FILE, {})
+    data = load_user_json(DATA_FILE, {})
     if not isinstance(data, dict):
         data = {}
     data.setdefault("courses", [])
@@ -41,7 +42,7 @@ def load_data() -> dict:
 
 
 def save_data(data: dict) -> None:
-    save_json(DATA_FILE, data)
+    save_user_json(DATA_FILE, data)
 
 
 def to_min(hhmm: str) -> int:
@@ -257,7 +258,7 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
         rooms = list(dict.fromkeys(s["room"] for s in b["slots"] if s.get("room")))
         lines = [f"<b>{esc(c['name'])}</b>"]
         if rooms:
-            lines.append("📍" + esc(" / ".join(rooms)))
+            lines.append(icon("pin") + esc(" / ".join(rooms)))
         if c.get("teacher"):
             lines.append(esc(c["teacher"]))
         if exams.get(b["course_id"]):  # 連結到這門課的下一場考試
@@ -309,7 +310,7 @@ def _tab_add(data: dict) -> None:
         st.text_input("備註（選填）", key="tt_note")
 
     with st.container(border=True):
-        st.markdown("**🕘 上課時段**")
+        st.markdown(f"**{icon('clock') or '🕘'} 上課時段**", unsafe_allow_html=True)
         st.multiselect("星期（可複選，同節次的多天一次加入）", list(range(7)), key="tt_days",
                        format_func=WEEKDAYS.__getitem__, placeholder="選擇星期")
         st.radio("時段類型", [MODE_P, MODE_C], key="tt_mode", horizontal=True)
@@ -349,8 +350,9 @@ def _tab_manage(data: dict) -> None:
         n_exam = f"　·　📝 {len(exams[cid])} 場考試" if exams.get(cid) else ""
         with st.expander(f"{c['name']}　·　{float(c.get('credits', 0)):g} 學分　·　{len(mine)} 個時段{n_exam}"):
             for e in exams.get(cid, []):
-                place = f"　📍{e['place']}" if e.get("place") else ""
-                st.markdown(f"📝 **{e['subject']}**　{e['datetime'][:16].replace('T', ' ')}{place}")
+                place = f"　{icon('pin')}{esc(e['place'])}" if e.get("place") else ""
+                st.markdown(f"📝 **{esc(e['subject'])}**　{e['datetime'][:16].replace('T', ' ')}{place}",
+                            unsafe_allow_html=True)
             with st.form(f"edit_{cid}"):
                 f1, f2 = st.columns([3, 1])
                 name = f1.text_input("課程名稱", c["name"])
@@ -364,8 +366,8 @@ def _tab_manage(data: dict) -> None:
                     st.rerun()
             for s in mine:
                 l, r = st.columns([8, 1])
-                room = f"　📍{s['room']}" if s.get("room") else ""
-                l.markdown(f"🕘 {slot_label(s)}{room}")
+                room = f"　{icon('pin')}{esc(s['room'])}" if s.get("room") else ""
+                l.markdown(f"{icon('clock') or '🕘'} {slot_label(s)}{room}", unsafe_allow_html=True)
                 if r.button("🗑️", key=f"del_slot_{s['id']}", help="刪除這個時段"):
                     data["slots"] = [x for x in data["slots"] if x["id"] != s["id"]]
                     save_data(data)
@@ -378,7 +380,7 @@ def _tab_manage(data: dict) -> None:
 
 
 def render() -> None:
-    hero("我的課表", "依學校節次填入課程，同一門課可重複選用", "📆")
+    hero("我的課表", "依學校節次填入課程，同一門課可重複選用", "calendar")
     _init_state()
     data = load_data()
     tab1, tab2, tab3 = st.tabs(["📆 我的課表", "➕ 新增時段", "📚 課程管理"])
@@ -390,4 +392,4 @@ def render() -> None:
         _tab_manage(data)
 
 
-FEATURE = Feature(title="課表", icon="📆", render=render, slug="timetable")
+FEATURE = Feature(title="課表", icon="📆", render=render, slug="timetable", ico="calendar")

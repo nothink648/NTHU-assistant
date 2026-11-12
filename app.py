@@ -2,19 +2,34 @@
 import streamlit as st
 
 from config import APP_ICON, APP_TITLE
+from core.auth import current_uid, sync_cookie
+from core.login import render_account, render_login
+from core import icons
 from core.ui import inject_css
 from features import FEATURES
 
-st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide")
-inject_css()
+st.set_page_config(page_title=APP_TITLE, page_icon=icons.path("cap") or APP_ICON, layout="wide")
+inject_css(icons.css([f.ico for f in FEATURES]))
+
+uid = current_uid()
+sync_cookie()
+if not uid:  # 未登入：只顯示登入 / 註冊畫面
+    render_login()
+    st.stop()
 
 pages = [
-    st.Page(f.render, title=f.title, icon=f.icon,
+    st.Page(f.render, title=f.title, icon=None if icons.has(f.ico) else f.icon,
             url_path=None if f.default else f.slug, default=f.default)
     for f in FEATURES
 ]
 
 nav = st.navigation(pages)
-st.sidebar.title(f"{APP_ICON} {APP_TITLE}")
-st.sidebar.caption("🌓 淺色 / 深色 / 自動：右上角 ⋮ → Settings → Theme")
+current = next((i for i, p in enumerate(pages, 1) if p.title == nav.title), 0)
+if current:  # 目前所在頁面：icon 與底色用主題色（舊版 Streamlit 沒有 aria-current 可以判斷）
+    st.sidebar.markdown(f"<style>[data-testid='stSidebarNavItems'] li:nth-child({current}) [data-testid='stSidebarNavLink']"
+                f"{{background:var(--acc-soft)!important;box-shadow:inset 3px 0 0 var(--acc)}}"
+                f"[data-testid='stSidebarNavItems'] li:nth-child({current}) [data-testid='stSidebarNavLink']::before"
+                f"{{background:var(--acc)!important;opacity:1!important}}</style>", unsafe_allow_html=True)
+st.sidebar.markdown(f'<div class="side-brand">{icons.icon("cap")}{APP_TITLE}</div>', unsafe_allow_html=True)
+render_account(uid)
 nav.run()

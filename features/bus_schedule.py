@@ -19,6 +19,7 @@ weekday（平日）/ weekend（假日）可以寫成「逗號或空格分隔的�
 時間後面可加註記：♦ 週五停駛、※ 付費市區公車 83 號（見 MARKS）。
 color（選填，#RRGGBB）是路線在頁面上的標示顏色；沒寫就依 type 決定。
 stops（選填）是停靠站，會顯示在完整時刻表。
+「關注路線」（校本部 / 南大校區 / 全部）是個人設定，存在 data/users/<id>/settings.json，決定首頁顯示哪些公車。
 """
 from __future__ import annotations
 
@@ -30,6 +31,8 @@ import pandas as pd
 import streamlit as st
 
 from config import DATA_DIR
+from core.storage import load_user_json, save_user_json
+from core.icons import icon
 from core.ui import badge, empty, esc, hero, html
 from features.base import Feature
 
@@ -40,9 +43,15 @@ SERVICE_DAYS = {"weekday": "平日", "weekend": "假日"}
 DIR_ICONS = {"上山": "⬆️", "下山": "⬇️", "往南大": "➡️", "往校本部": "⬅️"}
 KINDS = {  # type -> (顯示文字, 主色)
     "campus": ("校內", "#6C63FF"),
-    "offcampus": ("校外", "#E08A1E"),
     "nanda": ("南大校區", "#2F7FD8"),
 }
+SETTINGS_FILE = "settings.json"
+FOCUS = {  # 關注路線 -> (選項文字, 首頁標籤, 包含的 type；None 代表全部)
+    "campus": ("🏫 校本部（綠線、紅線）", "校本部", {"campus"}),
+    "nanda": ("🚍 往返南大校區（南大線一、二）", "南大校區", {"nanda"}),
+    "all": ("🗺️ 全部路線", "全部", None),
+}
+DEFAULT_FOCUS = "campus"
 PER_ROW = 3  # 「即將發車」每列最多幾張卡片
 
 
@@ -86,6 +95,25 @@ def load_bus_data() -> tuple[dict, str | None]:
     if isinstance(raw, list):  # 相容舊格式
         raw = {"routes": raw}
     return raw, None
+
+
+def get_focus() -> str:
+    data = load_user_json(SETTINGS_FILE, {})
+    focus = data.get("bus_focus") if isinstance(data, dict) else None
+    return focus if focus in FOCUS else DEFAULT_FOCUS
+
+
+def set_focus(focus: str) -> None:
+    data = load_user_json(SETTINGS_FILE, {})
+    data = data if isinstance(data, dict) else {}
+    data["bus_focus"] = focus
+    save_user_json(SETTINGS_FILE, data)
+
+
+def focus_routes(routes: list[dict], focus: str | None = None) -> list[dict]:
+    """只留下關注的路線種類（首頁用）。"""
+    types = FOCUS[focus or get_focus()][2]
+    return [r for r in routes if types is None or r.get("type", "campus") in types]
 
 
 def load_routes() -> list[dict]:
@@ -183,10 +211,10 @@ def route_card(route: dict, now: datetime, default_origin: str) -> str:
             if route.get("note") and not _valid_color(route.get("color")) else "")
     parts = []
     for d in get_directions(route, default_origin):
-        icon = DIR_ICONS.get(d.get("name", ""), "🚌")
-        origin = f'📍 {esc(d["origin"])}' if d.get("origin") else ""
+        dir_icon = DIR_ICONS.get(d.get("name", ""), "🚌")
+        origin = f'{icon("pin")} {esc(d["origin"])}' if d.get("origin") else ""
         parts.append(f'<div class="sub" style="color:color-mix(in srgb,{c} 85%,currentColor)">'
-                     f'<span>{icon} {esc(d.get("name", ""))}</span>'
+                     f'<span>{dir_icon} {esc(d.get("name", ""))}</span>'
                      f'<span class="muted">{origin}</span></div>')
         if not parse_entries(d.get(day, [])):
             if day == "weekend":
@@ -214,7 +242,7 @@ def timetable_df(entries: list[tuple[str, str]]) -> pd.DataFrame:
 def render() -> None:
     data, err = load_bus_data()
     default_origin = data.get("origin", "")
-    hero("公車班表", "校本部綠線、紅線　·　往返南大校區　·　編輯 data/bus_schedule.json 更新", "🚌")
+    hero("公車班表", "校本部綠線、紅線　·　往返南大校區　·　編輯 data/bus_schedule.json 更新", "bus")
 
     if err:
         st.error(err)
@@ -230,6 +258,11 @@ def render() -> None:
                 if bad:
                     st.warning(f"{r.get('name', '?')} {d.get('name', '')}（{SERVICE_DAYS[day]}）有無法辨識的時間："
                                f"{'、'.join(bad)}，請用 07:30 這種格式")
+
+    with st.container(border=True):
+        html(f'<div style="font-weight:700">{icon("star")} 關注路線<span class="muted">（決定首頁顯示哪些公車）</span></div>')
+        st.radio("關注路線", list(FOCUS), index=list(FOCUS).index(get_focus()), label_visibility="collapsed",
+                 format_func=lambda k: FOCUS[k][0], horizontal=True, key="bus_focus", on_change=_save_focus)
 
     now = datetime.now()
     if day_key(now) == "weekend":
@@ -254,9 +287,9 @@ def render() -> None:
             dirs = get_directions(r, default_origin)
             for col, d in zip(st.columns(len(dirs)), dirs):
                 with col:
-                    icon = DIR_ICONS.get(d.get("name", ""), "🚌")
-                    origin = f"　📍{d['origin']}" if d.get("origin") else ""
-                    st.markdown(f"**{icon} {d.get('name', '')}**{origin}")
+                    dir_icon = DIR_ICONS.get(d.get("name", ""), "🚌")
+                    origin = f"　{icon('pin')}{esc(d['origin'])}" if d.get("origin") else ""
+                    st.markdown(f"**{dir_icon} {esc(d.get('name', ''))}**{origin}", unsafe_allow_html=True)
                     if d.get("stops"):
                         st.caption("停靠：" + " → ".join(map(str, d["stops"])))
                     weekend = parse_entries(d.get("weekend", []))
@@ -276,4 +309,10 @@ def render() -> None:
                                 {"♦": "週五停駛（僅週一至週四）", "※": "付費市區公車 83 號"}.items()))
 
 
-FEATURE = Feature(title="公車班表", icon="🚌", render=render, slug="bus")
+def _save_focus() -> None:
+    focus = st.session_state.get("bus_focus", DEFAULT_FOCUS)
+    set_focus(focus)
+    st.toast(f"首頁將顯示：{FOCUS[focus][1]}的公車", icon="⭐")
+
+
+FEATURE = Feature(title="公車班表", icon="🚌", render=render, slug="bus", ico="bus")

@@ -12,7 +12,8 @@ from datetime import datetime
 import streamlit as st
 
 from config import WEEKDAYS
-from core.storage import load_json, save_json
+from core.storage import load_user_json, save_user_json
+from core.icons import icon
 from core.ui import badge, esc, hero, html
 from features.base import Feature
 from features.timetable import course_colors, load_data as load_timetable
@@ -23,12 +24,12 @@ WARN_DAYS = 3  # 幾天內的考試用警示色標示
 
 # ---------- 資料邏輯（可被其他頁面重複使用） ----------
 def load_exams() -> list[dict]:
-    data = load_json(DATA_FILE, [])
+    data = load_user_json(DATA_FILE, [])
     return data if isinstance(data, list) else []
 
 
 def save_exams(exams: list[dict]) -> None:
-    save_json(DATA_FILE, exams)
+    save_user_json(DATA_FILE, exams)
 
 
 def exam_datetime(exam: dict) -> datetime:
@@ -67,7 +68,7 @@ def course_html(exam: dict, timetable: dict | None = None) -> str:
     course = next((c for c in timetable["courses"] if c["id"] == exam.get("course_id")), None)
     if not course:
         return ""
-    teacher = f'<span class="muted">　👤 {esc(course["teacher"])}</span>' if course.get("teacher") else ""
+    teacher = f'<span class="muted">　{icon("person")} {esc(course["teacher"])}</span>' if course.get("teacher") else ""
     return (f'<div style="margin:2px 0 4px">{badge("📚 " + course["name"], course_colors(timetable)[course["id"]])}'
             f'{teacher}</div>')
 
@@ -75,10 +76,10 @@ def course_html(exam: dict, timetable: dict | None = None) -> str:
 def exam_card(exam: dict, now: datetime, timetable: dict | None = None) -> str:
     dt = exam_datetime(exam)
     urgent = (dt - now).days < WARN_DAYS
-    place = f"　📍{esc(exam['place'])}" if exam.get("place") else ""
+    place = f"　{icon('pin')}{esc(exam['place'])}" if exam.get("place") else ""
     when = f"{dt:%Y/%m/%d}（{WEEKDAYS[dt.weekday()]}）{dt:%H:%M}"
-    tag = badge(f"⏳ 剩 {countdown_text(dt, now)}", "#E5486F" if urgent else "#6C63FF")
-    return (f'<div class="card exam {"urgent" if urgent else ""}"><div class="card-head">'
+    tag = badge(f"剩 {countdown_text(dt, now)}", "#E5486F" if urgent else "#6C63FF", ico="hourglass")
+    return (f'<div class="card exam exam-card {"urgent" if urgent else ""}"><div class="card-head">'
             f'<span class="card-title">{esc(exam["subject"])}</span>{tag}</div>'
             f'{course_html(exam, timetable)}<div class="muted">🗓️ {when}{place}</div>{links_html(exam)}</div>')
 
@@ -112,7 +113,7 @@ def links_html(exam: dict) -> str:
 
 # ---------- 頁面 ----------
 def render() -> None:
-    hero("考試提醒", "新增考試，隨時掌握倒數", "📅")
+    hero("考試提醒", "新增考試，隨時掌握倒數", "alarm")
 
     timetable = load_timetable()
     courses = {c["id"]: c for c in timetable["courses"]}
@@ -159,16 +160,78 @@ def render() -> None:
         st.info("目前沒有即將到來的考試 🎉　點上方「新增考試」加入第一場吧！")
         return
 
-    st.caption(f"共 {len(upcoming)} 場即將到來　·　{WARN_DAYS} 天內的考試會以紅色標示")
+    st.caption(f"共 {len(upcoming)} 場即將到來　·　{WARN_DAYS} 天內的考試會以紅色標示　·　按卡片右上角的 ⋮ 可修改、連結科目或刪除")
+    html(MENU_CSS)
     for exam in upcoming:
-        c1, c2, c3 = st.columns([12, 1, 1], vertical_alignment="center")
-        with c1:
+        with st.container():  # 每張卡片一個容器：⋮ 選單用 CSS 疊在卡片右上角
+            _menu(exam, course_opts, course_fmt)
             html(exam_card(exam, now, timetable))
-        with c2.popover("🔗", help="連結課表科目"):
-            cur = exam.get("course_id") if exam.get("course_id") in courses else ""
-            st.selectbox("課表科目", course_opts, index=course_opts.index(cur), format_func=course_fmt,
-                         key=f"link_{exam['id']}", on_change=_relink, args=(exam,))
-        c3.button("🗑️", key=f"del_{exam['id']}", help="刪除", on_click=_delete, args=(exam,))
+
+
+# 把「⋮」選單按鈕定位到卡片右上角（同一個容器裡：先選單、後卡片）
+_EC = ':is([data-testid="stElementContainer"],.element-container)'
+# 選單按鈕的外層：新版是 stLayoutWrapper / stElementContainer，1.37 直接是 stPopover
+_PM = (':is([data-testid="stLayoutWrapper"]:has(> [data-testid="stPopover"]),'
+       f'{_EC}:has(> [data-testid="stPopover"]),[data-testid="stPopover"]):has(+ {_EC} .exam-card)')
+MENU_CSS = f"""<style>
+[data-testid="stVerticalBlock"]:has(> {_EC} .exam-card){{position:relative;gap:0!important}}
+[data-testid="stVerticalBlock"] > {_PM}{{position:absolute!important;top:12px;right:12px;z-index:5;width:auto!important}}
+{_PM} button{{min-height:0;height:30px;width:34px;padding:0;border-radius:10px;
+  border:none;background:transparent;font-size:1.25rem;font-weight:800;line-height:1}}
+{_PM} button:hover{{background:var(--acc-soft);transform:none;box-shadow:none}}
+{_PM} button [data-testid="stMarkdownContainer"] [data-testid="stIconMaterial"]{{font-size:1.35rem}}
+{_PM} button > div > :is(svg,[data-testid="stIconMaterial"]):last-child,{_PM} button > :is(svg,[data-testid="stIconMaterial"]):last-child{{display:none}}
+.exam-card .card-head{{padding-right:40px}}
+.pm-h{{font-weight:700;margin:2px 0 4px}}
+</style>"""
+
+
+MENU_LABEL = ":material/more_vert:"  # 直立三點；新版 Streamlit 用文字「⋮」當標籤時選單會打不開
+
+
+def _menu(exam: dict, course_opts: list[str], course_fmt) -> None:
+    """卡片右上角的 ⋮：連結科目 / 修改 / 刪除。"""
+    eid = exam["id"]
+    with st.popover(MENU_LABEL):
+        html('<div class="pm-h">🔗 連結課表科目</div>')  # 新版 Streamlit：popover 內放粗體 markdown 會打不開，改用 HTML
+        cur = exam.get("course_id") if exam.get("course_id") in course_opts else ""
+        st.selectbox("課表科目", course_opts, index=course_opts.index(cur), format_func=course_fmt,
+                     key=f"link_{eid}", on_change=_relink, args=(exam,), label_visibility="collapsed")
+
+        html('<div class="pm-h">✏️ 修改考試</div>')
+        dt = exam_datetime(exam)
+        with st.form(f"edit_{eid}", border=False):
+            st.text_input("考試名稱", exam["subject"], key=f"ed_subject_{eid}")
+            c1, c2 = st.columns(2)
+            c1.date_input("日期", dt.date(), key=f"ed_date_{eid}")
+            c2.time_input("時間", dt.time(), step=300, key=f"ed_time_{eid}")
+            st.text_input("地點", exam.get("place", ""), key=f"ed_place_{eid}")
+            st.text_area("歷屆考古題連結（一行一個）", "\n".join(exam.get("links") or []), height=80,
+                         key=f"ed_links_{eid}")
+            st.form_submit_button("💾 儲存修改", type="primary", on_click=_save_edit, args=(exam,),
+                                  use_container_width=True)
+
+        st.button("🗑️ 刪除這場考試", key=f"del_{eid}", on_click=_delete, args=(exam,), use_container_width=True)
+
+
+def _save_edit(exam: dict) -> None:
+    ss, eid = st.session_state, exam["id"]
+    subject = ss.get(f"ed_subject_{eid}", "").strip()
+    links, bad = parse_links(ss.get(f"ed_links_{eid}", ""))
+    if not subject:
+        st.toast("考試名稱不能空白，未儲存", icon="⚠️")
+        return
+    if bad:
+        st.toast("連結格式不正確（需以 http:// 或 https:// 開頭）：" + "、".join(bad), icon="⚠️")
+        return
+    when = datetime.combine(ss[f"ed_date_{eid}"], ss[f"ed_time_{eid}"])
+    exams = load_exams()
+    for e in exams:
+        if e.get("id") == eid:
+            e.update(subject=subject, datetime=when.isoformat(),
+                     place=ss.get(f"ed_place_{eid}", "").strip(), links=links)
+    save_exams(exams)
+    st.toast(f"已更新：{subject}" + ("（時間已過，不會再顯示在清單）" if when < datetime.now() else ""), icon="✏️")
 
 
 def _relink(exam: dict) -> None:
@@ -186,4 +249,4 @@ def _delete(exam: dict) -> None:
     st.toast(f"已刪除：{exam['subject']}", icon="🗑️")
 
 
-FEATURE = Feature(title="考試提醒", icon="📅", render=render, slug="exams")
+FEATURE = Feature(title="考試提醒", icon="📅", render=render, slug="exams", ico="alarm")
