@@ -15,6 +15,7 @@ from features.school_calendar import CAL_COLOR, day_label, load_events
 BRANCHES = [("library-main", "總圖書館"), ("library-hss", "人社分館"), ("library-nanda", "南大分館")]
 RSS_TYPES = {"news": "最新消息", "eresources": "電子資源", "exhibit": "展覽活動", "branches": "分館消息"}
 HOURS_DAYS = 7  # 開館時間列出今天起幾天
+BOOKING_URL = "https://libsms.lib.nthu.edu.tw/"  # 圖書館空間管理系統（讀者登入後預約研究小間、討論室等）
 
 CSS = """<style>
 .lib-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch}
@@ -155,6 +156,9 @@ def lost_tab() -> None:
 def render() -> None:
     html(CSS)
     hero("圖書館", "空間使用　·　開館時間　·　最新消息　·　失物招領　·　資料來源 NTHU Data API", "📚")
+    c1, c2 = st.columns([3, 1], vertical_alignment="center")
+    c1.caption("研究小間、討論室、簡報練習室等空間需登入圖書館空間管理系統預約。")
+    c2.link_button("📅 前往預約空間", BOOKING_URL, type="primary", use_container_width=True)
     t1, t2, t3, t4 = st.tabs(["🪑 空間使用", "🕘 開館時間", "📰 最新消息", "🔍 失物招領"])
     with t1:
         spaces_tab()
