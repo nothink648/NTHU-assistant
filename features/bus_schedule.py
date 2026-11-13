@@ -33,7 +33,7 @@ import streamlit as st
 from config import DATA_DIR
 from core import nthu_api
 from core.storage import load_user_json, save_user_json
-from core.icons import icon
+from core.icons import arrow, before_css, has as has_icon, icon, label as icon_label, tab_css
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 
@@ -41,16 +41,16 @@ DATA_FILE = "bus_schedule.json"
 MARKS = {"♦": "週五停駛", "※": "付費 83 號"}  # 時間後面的註記
 TIME_RE = re.compile(r"^(\d{1,2})[:：](\d{2})([" + "".join(MARKS) + r"]*)$")
 SERVICE_DAYS = {"weekday": "平日", "weekend": "假日"}
-DIR_ICONS = {"上山": "⬆️", "下山": "⬇️", "往南大": "➡️", "往校本部": "⬅️"}
+DIR_ARROWS = {"上山": 0, "下山": 180, "往南大": 90, "往校本部": 270}  # 方向 -> 箭頭旋轉角度（arrow-up.png）
 KINDS = {  # type -> (顯示文字, 主色)
     "campus": ("校內", "#6C63FF"),
     "nanda": ("南大校區", "#2F7FD8"),
 }
 SETTINGS_FILE = "settings.json"
 FOCUS = {  # 關注路線 -> (選項文字, 首頁標籤, 包含的 type；None 代表全部)
-    "campus": ("🏫 校本部（綠線、紅線）", "校本部", {"campus"}),
-    "nanda": ("🚍 往返南大校區（南大線一、二）", "南大校區", {"nanda"}),
-    "all": ("🗺️ 全部路線", "全部", None),
+    "campus": ("校本部（綠線、紅線）" if has_icon("school") else "🏫 校本部（綠線、紅線）", "校本部", {"campus"}),
+    "nanda": ("往返南大校區（南大線一、二）" if has_icon("school") else "🏫 往返南大校區（南大線一、二）", "南大校區", {"nanda"}),
+    "all": ("全部路線", "全部", None),
 }
 DEFAULT_FOCUS = "campus"
 PER_ROW = 3  # 「即將發車」每列最多幾張卡片
@@ -279,7 +279,7 @@ def route_card(route: dict, now: datetime, default_origin: str) -> str:
             if route.get("note") and not _valid_color(route.get("color")) else "")
     parts = []
     for d in get_directions(route, default_origin):
-        dir_icon = DIR_ICONS.get(d.get("name", ""), "🚌")
+        dir_icon = dir_arrow(d)
         origin = f'{icon("pin")} {esc(d["origin"])}' if d.get("origin") else ""
         parts.append(f'<div class="sub" style="color:color-mix(in srgb,{c} 85%,currentColor)">'
                      f'<span>{dir_icon} {esc(d.get("name", ""))}</span>'
@@ -333,7 +333,7 @@ def arrivals_tab(now: datetime) -> None:
             title = f'{dot}<span style="color:color-mix(in srgb,{b["color"]} 85%,currentColor)">{esc(b["name"])}</span>'
             dest = f"　往 {esc(b['dest'])}" if b["dest"] and b["dest"] != stop else "　終點站"
             first = b["origin"] == stop
-            path = " → ".join(
+            path = f" {arrow()} ".join(
                 f"<b>{esc(s['stop'])} {esc(s.get('arrive_time', ''))}</b>" if s["stop"] == stop
                 else f"{esc(s['stop'])} {esc(s.get('arrive_time', ''))}" for s in b["stops"])
             parts = ["本站發車" if first else f"{esc(b['origin'])} {esc(b['dep'])} 發車" if b["dep"] else ""]
@@ -377,6 +377,7 @@ def render() -> None:
                                f"{'、'.join(bad)}，請用 07:30 這種格式")
 
     with st.container(border=True):
+        html(_focus_icon_css())
         html(f'<div style="font-weight:700">{icon("star")} 關注路線<span class="muted">（決定首頁顯示哪些公車）</span></div>')
         st.radio("關注路線", list(FOCUS), index=list(FOCUS).index(get_focus()), label_visibility="collapsed",
                  format_func=lambda k: FOCUS[k][0], horizontal=True, key="bus_focus", on_change=_save_focus)
@@ -387,7 +388,10 @@ def render() -> None:
     elif now.weekday() == 4:
         st.info("今天是週五，標 ♦ 的南大線班次停駛，下方已自動略過。")
 
-    tab_stop, tab_next, tab_all = st.tabs(["📍 到站時間", "⏱️ 即將發車", "📋 完整時刻表"])
+    html("<style>" + tab_css("bus_tabs", ["pin", "clock", "time-list"]) + "</style>")
+    with st.container(key="bus_tabs"):
+        tab_stop, tab_next, tab_all = st.tabs([icon_label("pin", "到站時間"), icon_label("clock", "即將發車"),
+                                               icon_label("time-list", "完整時刻表")])
 
     with tab_stop:
         arrivals_tab(now)
@@ -407,11 +411,11 @@ def render() -> None:
             dirs = get_directions(r, default_origin)
             for col, d in zip(st.columns(len(dirs)), dirs):
                 with col:
-                    dir_icon = DIR_ICONS.get(d.get("name", ""), "🚌")
+                    dir_icon = dir_arrow(d)
                     origin = f"　{icon('pin')}{esc(d['origin'])}" if d.get("origin") else ""
                     st.markdown(f"**{dir_icon} {esc(d.get('name', ''))}**{origin}", unsafe_allow_html=True)
                     if d.get("stops"):
-                        st.caption("停靠：" + " → ".join(map(str, d["stops"])))
+                        st.caption("停靠：" + f" {arrow()} ".join(esc(s) for s in d["stops"]), unsafe_allow_html=True)
                     weekend = parse_entries(d.get("weekend", []))
                     for day, label in SERVICE_DAYS.items():
                         entries = parse_entries(d.get(day, []))
@@ -427,6 +431,18 @@ def render() -> None:
                for day in SERVICE_DAYS for _, mk in parse_entries(d.get(day, []))):
             st.caption("　".join(f"{k} {v}" for k, v in
                                 {"♦": "週五停駛（僅週一至週四）", "※": "付費市區公車 83 號"}.items()))
+
+
+def _focus_icon_css() -> str:
+    """「關注路線」的校本部、南大校區選項前面畫上 school icon（選項文字不能放 HTML，用 ::before）；全部路線不放。"""
+    return ("<style>" + before_css(".st-key-bus_focus label:has(input[value='0']) p", "school")
+            + before_css(".st-key-bus_focus label:has(input[value='1']) p", "school") + "</style>")
+
+
+def dir_arrow(direction: dict) -> str:
+    """方向名稱前的箭頭：上山 ↑、下山 ↓、往南大 →、往校本部 ←；其他方向用公車。"""
+    rot = DIR_ARROWS.get(direction.get("name", ""))
+    return arrow(rot) if rot is not None else "🚌"
 
 
 def _save_focus() -> None:

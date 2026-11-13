@@ -1,0 +1,12 @@
+# Ruff：Python 的排版與檢查工具（VS Code 擴充套件 charliermarsh.ruff 會讀這個檔）
+line-length = 120          # 每行最多 120 字，和現有程式碼一致
+target-version = "py39"    # README 要求 Python 3.9 以上
+extend-exclude = ["data"]
+
+[lint]
+select = ["E4", "E7", "E9", "F"]  # 只檢查基本問題：語法錯誤、未使用的 import / 變數、未定義的名稱
+
+[format]
+quote-style = "double"     # 字串用雙引號
+indent-style = "space"
+line-ending = "lf"         # 配合 .gitattributes 的 LF 換行

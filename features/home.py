@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import random
 from datetime import datetime
 
 import streamlit as st
@@ -16,8 +17,8 @@ from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 from features.bus_schedule import (FOCUS, eta_text, focus_routes, get_directions, get_focus, get_next_buses,
                                    load_bus_data, mark_html, route_color)
-from features.exam_reminder import (WARN_DAYS, countdown_text, course_html, exam_datetime,
-                                    get_upcoming_exams, links_html)
+from features.exam_reminder import (WARN_DAYS, countdown_text, course_html, exam_datetime, get_upcoming_exams,
+                                    kind_badge, kind_name, links_html, when_html)
 from features.restaurants import all_restaurants, load_data as load_food, status
 from features.school_calendar import marquee_html
 from features.timetable import to_min, today_classes
@@ -58,17 +59,25 @@ HOME_CSS = """<style>
 </style>"""
 
 
-def greeting(now: datetime) -> str:
-    h = now.hour
-    if h < 5:
-        return "夜深了，早點休息 🌙"
-    if h < 11:
-        return "早安！今天也加油 ☀️"
-    if h < 14:
-        return "午安，記得吃飯 🍱"
-    if h < 18:
-        return "嗨~ ☕"
-    return "晚安，辛苦了 🌆"
+# 問候語：依時段分組，每次打開首頁從該時段隨機挑一句；{name} 會換成使用者帳號名稱
+GREETINGS = [  # (開始小時, 結束小時, 句子)
+    (0, 5, ["{name}，夜深了，早點休息 🌙", "這麼晚還沒睡嗎，{name}？ 🦉", "{name}，熬夜傷身，記得喝水 💧",
+            "夜貓子 {name} 你好 🌌", "{name}，明天的事明天再煩惱吧 😴"]),
+    (5, 11, ["早安，{name}！今天也加油 ☀️", "{name}，新的一天開始了 🌱", "早啊 {name}，吃早餐了嗎？ 🥪",
+             "{name}，早八辛苦了 ☕", "早安 {name}，今天會是好日子 🌤️"]),
+    (11, 14, ["午安，{name}！記得吃飯 🍱", "{name}，中午想吃什麼？ 🍜", "午安 {name}，充個電再出發 🔋",
+              "{name}，吃飽才有力氣上課 🍙", "嗨 {name}，午休時間到了 😌"]),
+    (14, 18, ["午安，{name} ☕", "{name}，下午也要打起精神 💪", "嗨 {name}，來杯飲料續命吧 🧋",
+              "{name}，今天的課還順利嗎？ 📚", "再撐一下，{name}，快下課了 ⏳"]),
+    (18, 24, ["晚安，{name}，辛苦了 🌆", "{name}，今天也辛苦了 🌙", "晚上好 {name}，記得吃晚餐 🍛",
+              "{name}，作業寫完了嗎？ 📝", "好好休息，{name}，明天見 ✨"]),
+]
+
+
+def greeting(now: datetime, name: str = "") -> str:
+    """依目前時段，隨機挑一句問候語（沒有名稱時稱呼「同學」）。"""
+    lines = next(g for s, e, g in GREETINGS if s <= now.hour < e)
+    return random.choice(lines).format(name=name or "同學")
 
 
 def _head(title: str, extra: str = "") -> str:
@@ -136,10 +145,10 @@ def stats_strip(now: datetime) -> str:
     exams = get_upcoming_exams(now)
     if exams:
         days = (exam_datetime(exams[0]).date() - now.date()).days
-        exam = stat(icon("alarm") or "📅", "#E5486F", "下一場考試", "今天" if days == 0 else f"{days}<small>天後</small>",
-                    esc(exams[0]["subject"]))
+        exam = stat(icon("alarm") or "📅", "#E5486F", "考試 / 作業", "今天" if days == 0 else f"{days}<small>天後</small>",
+                    f'{kind_name(exams[0])}：{esc(exams[0]["subject"])}')
     else:
-        exam = stat(icon("alarm") or "📅", "#E5486F", "下一場考試", "—", "目前沒有考試 🎉")
+        exam = stat(icon("alarm") or "📅", "#E5486F", "考試 / 作業", "—", "目前沒有考試或作業 🎉")
 
     opened, total = open_food(now)
     food = stat(icon("food") or "🍱", "#E08A1E", "營業中餐廳", f"{len(opened)}<small>家</small>", f"校內共 {total} 家")
@@ -170,22 +179,21 @@ def class_summary(now: datetime) -> str:
 
 
 def exam_summary(now: datetime) -> str:
-    head = _head((icon("alarm") or "📅 ") + "下一場考試")
     exams = get_upcoming_exams(now)
+    head = _head((icon("alarm") or "📅 ") + "下一個考試 / 作業", kind_badge(exams[0]) if exams else "")
     if not exams:
-        return card(head + _grow(empty("🎉", "目前沒有考試")))
+        return card(head + _grow(empty("🎉", "目前沒有考試或作業")))
     e = exams[0]
     dt = exam_datetime(e)
     urgent = (dt - now).days < WARN_DAYS
-    place = f"　{icon('pin')}{esc(e['place'])}" if e.get("place") else ""
     main = (f'<div class="big">{esc(e["subject"])}</div>{course_html(e)}'
             f'<div style="margin:4px 0">{badge("剩 " + countdown_text(dt, now), "#E5486F" if urgent else "#6C63FF", ico="hourglass")}</div>'
-            f'<div class="muted">🗓️ {dt:%Y/%m/%d}（{WEEKDAYS[dt.weekday()]}）{dt:%H:%M}{place}</div>{links_html(e)}')
+            f'<div class="muted">{when_html(e, dt)}</div>{links_html(e)}')
     more = ""
     if len(exams) > 1:
-        rest = "".join(f'<div class="row"><span class="t">{esc(x["subject"])}</span>'
+        rest = "".join(f'<div class="row"><span class="t">{kind_badge(x)} {esc(x["subject"])}</span>'
                        f'<span class="e">{exam_datetime(x):%m/%d}</span></div>' for x in exams[1:4])
-        more = f'<div class="foot"><div class="muted">之後還有 {len(exams) - 1} 場</div>{rest}</div>'
+        more = f'<div class="foot"><div class="muted">之後還有 {len(exams) - 1} 項</div>{rest}</div>'
     return card(head + _grow(main) + more, "exam urgent" if urgent else "exam")
 
 
@@ -232,7 +240,7 @@ def render() -> None:
     now = datetime.now()
     html(HOME_CSS)
     name = username(st.session_state.get("auth_uid"))
-    hero(greeting(now), f"{name + '　·　' if name else ''}{now:%Y/%m/%d}（{WEEKDAYS[now.weekday()]}）"
+    hero(greeting(now, name), f"{now:%Y/%m/%d}（{WEEKDAYS[now.weekday()]}）"
                         f"　{now:%H:%M}　·　{APP_TITLE}", "home")
     mq = marquee_html(now.date())  # 學校行事曆接下來的一個事件；API 與暫存都沒有資料時不顯示
     if mq:

@@ -7,7 +7,8 @@ from email.utils import parsedate_to_datetime
 import pandas as pd
 import streamlit as st
 
-from core import nthu_api
+from core import icons, nthu_api
+from core.icons import before_css, icon, label, tab_css
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 from features.school_calendar import CAL_COLOR, day_label, load_events
@@ -33,7 +34,7 @@ CSS = """<style>
 def spaces_tab() -> None:
     c1, c2 = st.columns([4, 1])
     c1.caption("各區目前可使用的數量，資料即時取自圖書館空間系統（約每分鐘更新）。")
-    refresh = c2.button("🔄 重新整理", use_container_width=True, key="lib_space_refresh")
+    refresh = c2.button("重新整理" if icons.has("refresh") else "🔄 重新整理", use_container_width=True, key="lib_space_refresh")
     data, err = nthu_api.get("/libraries/spaces", ttl=60, refresh=refresh)
     if err:
         st.warning(err)
@@ -68,7 +69,7 @@ def hours_tab() -> None:
         events, err = load_events(cal_id, today)
         color = CAL_COLOR.get(cal_id, "#6C63FF")
         if err and not events:
-            cards.append(card(f'<div class="card-head"><span class="card-title">{name}</span></div>'
+            cards.append(card(f'<div class="card-head"><span class="card-title">{icon("book")}{name}</span></div>'
                               + empty("⚠️", "暫時查不到")))
             continue
 
@@ -76,7 +77,7 @@ def hours_tab() -> None:
             return [e["title"] for e in events if e["start"] <= d <= e["last"]]
 
         now_titles = on(today)
-        head = f'<div class="card-head"><span class="card-title">{name}</span>{badge("今天", color, live=True)}</div>'
+        head = f'<div class="card-head"><span class="card-title">{icon("book")}{name}</span>{badge("今天", color, live=True)}</div>'
         today_html = ('<div class="lib-today">' + "".join(f"<div>{esc(t)}</div>" for t in now_titles) + "</div>"
                       if now_titles else empty("📭", "今天沒有登錄的開館資訊"))
         rows = []
@@ -85,7 +86,7 @@ def hours_tab() -> None:
             titles = on(d)
             rows.append(f'<div class="row"><span class="t">{day_label(d)}</span>'
                         f'<span class="e">{"<br>".join(esc(t) for t in titles) or "—"}</span></div>')
-        cards.append(card(head + today_html + '<div class="sub">接下來幾天</div>' + "".join(rows)))
+        cards.append(card(head + today_html + f'<div class="sub"><span>{icon("event")}接下來幾天</span></div>' + "".join(rows)))
     html(f'<div class="lib-grid">{"".join(cards)}</div>')
 
 
@@ -153,13 +154,28 @@ def lost_tab() -> None:
     st.dataframe(df, hide_index=True, use_container_width=True)
 
 
+def _refresh_icon_css() -> str:
+    """「重新整理」按鈕前面的 icon（按鈕文字不能放 HTML，用 ::before 畫；新版 Streamlit 會給元件 st-key-<key> class）。"""
+    if not icons.has("refresh"):
+        return ""
+    u = icons.URL.format("refresh")
+    return ("<style>.st-key-lib_space_refresh button p::before{content:'';display:inline-block;width:1em;height:1em;"
+            "margin-right:6px;vertical-align:-.15em;background:currentColor;-webkit-mask-size:contain;mask-size:contain;"
+            "-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;"
+            f"-webkit-mask-image:url({u});mask-image:url({u})}}</style>")
+
+
 def render() -> None:
-    html(CSS)
-    hero("圖書館", "空間使用　·　開館時間　·　最新消息　·　失物招領　·　資料來源 NTHU Data API", "📚")
+    html(CSS + _refresh_icon_css() + "<style>" + before_css(".st-key-lib_booking a p", "event")
+         + tab_css("lib_tabs", ["chair", "clock", "news", "search"]) + "</style>")
+    hero("圖書館", "空間使用　·　開館時間　·　最新消息　·　失物招領　·　資料來源 NTHU Data API", "book")
     c1, c2 = st.columns([3, 1], vertical_alignment="center")
     c1.caption("研究小間、討論室、簡報練習室等空間需登入圖書館空間管理系統預約。")
-    c2.link_button("📅 前往預約空間", BOOKING_URL, type="primary", use_container_width=True)
-    t1, t2, t3, t4 = st.tabs(["🪑 空間使用", "🕘 開館時間", "📰 最新消息", "🔍 失物招領"])
+    with c2.container(key="lib_booking"):
+        st.link_button(label("event", "前往預約空間"), BOOKING_URL, type="primary", use_container_width=True)
+    with st.container(key="lib_tabs"):
+        t1, t2, t3, t4 = st.tabs([label("chair", "空間使用"), label("clock", "開館時間"),
+                                  label("news", "最新消息"), label("search", "失物招領")])
     with t1:
         spaces_tab()
     with t2:
@@ -170,4 +186,4 @@ def render() -> None:
         lost_tab()
 
 
-FEATURE = Feature(title="圖書館", icon="📚", render=render, slug="library")
+FEATURE = Feature(title="圖書館", icon="📚", render=render, slug="library", ico="book")

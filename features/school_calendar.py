@@ -11,6 +11,7 @@ import streamlit as st
 
 from config import WEEKDAYS
 from core import nthu_api
+from core.icons import icon
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 
@@ -141,7 +142,7 @@ def marquee_html(today: date) -> str:
     if not e:
         return ""
     en = f'<span class="en">{esc(e["en"])}</span>' if e["en"] else ""
-    return (f'{MARQUEE_CSS}<div class="mq">{badge("行事曆 · " + countdown(e, today), "#6C63FF", live=True)}'
+    return (f'{MARQUEE_CSS}<div class="mq">{badge("行事曆 · " + countdown(e, today), "#6C63FF", ico="event")}'
             f'<div class="track"><span class="roll"><span class="when">{esc(range_label(e))}</span>{esc(e["zh"])}{en}</span></div></div>')
 
 
@@ -156,7 +157,7 @@ def _row(e: dict, today: date) -> str:
 def render() -> None:
     today = date.today()
     html(CSS)
-    hero("學校行事曆", "清華大學行事曆　·　圖書館開館日曆　·　資料來源 NTHU Data API", "🗓️")
+    hero("學校行事曆", "清華大學行事曆　·　圖書館開館日曆　·　資料來源 NTHU Data API", "school")
 
     cals = list_calendars()
     names = {c["id"]: c.get("name") or c["id"] for c in cals}
@@ -169,7 +170,7 @@ def render() -> None:
     nxt = next((e for e in events if e["start"] >= today), None)
     if nxt:
         en = f'<div class="muted">{esc(nxt["en"])}</div>' if nxt["en"] else ""
-        html(card(f'<div class="card-head"><span class="card-title">⏭️ 接下來</span>'
+        html(card(f'<div class="card-head"><span class="card-title">{icon("event") or "⏭️ "}接下來</span>'
                   f'{badge(countdown(nxt, today), color, live=True)}</div>'
                   f'<div class="big">{esc(nxt["zh"])}</div>{en}'
                   f'<div class="muted" style="margin-top:6px">🗓️ {esc(range_label(nxt))}</div>', "cal-next"))
@@ -190,7 +191,7 @@ def render() -> None:
     for e in shown[:limit]:
         months.setdefault((e["start"].year, e["start"].month), []).append(e)
     for (y, m), items in months.items():
-        head = (f'<div class="card-head"><span class="card-title">{y} 年 {m} 月</span>'
+        head = (f'<div class="card-head"><span class="card-title">{icon("event")}{y} 年 {m} 月</span>'
                 f'{badge(f"{len(items)} 件", color)}</div>')
         html(card(head + "".join(_row(e, today) for e in items)))
 
@@ -200,4 +201,4 @@ def render() -> None:
             st.rerun()
 
 
-FEATURE = Feature(title="學校行事曆", icon="🗓️", render=render, slug="school-calendar")
+FEATURE = Feature(title="學校行事曆", icon="🗓️", render=render, slug="school-calendar", ico="school")

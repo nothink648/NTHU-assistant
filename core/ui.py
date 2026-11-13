@@ -114,6 +114,9 @@ hr{border-color:var(--line)!important}
 [data-testid="baseButton-primary"],[data-testid="baseButton-primaryFormSubmit"]{background:linear-gradient(120deg,var(--acc),var(--acc2))!important;border:none!important;color:#fff!important}
 [data-testid="stBaseButton-primary"]:hover,[data-testid="stBaseButton-primaryFormSubmit"]:hover,
 [data-testid="baseButton-primary"]:hover,[data-testid="baseButton-primaryFormSubmit"]:hover{filter:brightness(1.08);color:#fff!important;box-shadow:0 8px 20px rgba(108,99,255,.35)}
+/* 連結按鈕（st.link_button type="primary"）也用主題紫 */
+[data-testid="stBaseLinkButton-primary"]{background:linear-gradient(120deg,var(--acc),var(--acc2))!important;border:none!important;color:#fff!important}
+[data-testid="stBaseLinkButton-primary"]:hover{filter:brightness(1.08);color:#fff!important;box-shadow:0 8px 20px rgba(108,99,255,.35)}
 
 /* ---------- Streamlit 內建元件改成主題紫（取代預設紅） ---------- */
 [data-testid="stTab"]{transition:color .2s}

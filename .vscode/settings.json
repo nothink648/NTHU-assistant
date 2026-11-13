@@ -1,0 +1,7 @@
+{
+  // Ruff：Python 存檔時自動排版（規則在 NTHU-assistant/ruff.toml）
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  }
+}

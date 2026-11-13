@@ -14,7 +14,7 @@ import streamlit as st
 
 from config import PERIODS, WEEKDAYS
 from core.storage import load_user_json, save_user_json
-from core.icons import icon
+from core.icons import before_css, icon, label, tab_css
 from core.ui import esc, hero, html
 from features.base import Feature
 
@@ -64,7 +64,7 @@ def course_colors(data: dict) -> dict[str, str]:
 
 
 def exams_by_course(now: datetime | None = None) -> dict[str, list[dict]]:
-    """{課程 id: [即將到來、有連結這門課的考試]}（延遲 import，避免和考試頁互相 import）。"""
+    """{課程 id: [即將到來、有連結這門課的考試 / 作業]}（延遲 import，避免和考試頁互相 import）。"""
     from features.exam_reminder import get_upcoming_exams
     result: dict[str, list[dict]] = {}
     for e in get_upcoming_exams(now):
@@ -247,8 +247,8 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
     today = datetime.now().weekday()
     cells += [f'<div class="tt-h{" today" if d == today else ""}" style="grid-row:1;grid-column:{col[d]}">'
               f'{WEEKDAYS[d]}</div>' for d in days]
-    for i, (label, a, b) in enumerate(PERIODS):
-        cells.append(f'<div class="tt-p" style="grid-row:{i + 2};grid-column:1">{esc(label)}'
+    for i, (period, a, b) in enumerate(PERIODS):
+        cells.append(f'<div class="tt-p" style="grid-row:{i + 2};grid-column:1">{esc(period)}'
                      f'<small>{a}<br>{b}</small></div>')
         cells += [f'<div class="tt-e" style="grid-row:{i + 2};grid-column:{col[d]}"></div>' for d in days]
 
@@ -261,9 +261,10 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
             lines.append(icon("pin") + esc(" / ".join(rooms)))
         if c.get("teacher"):
             lines.append(esc(c["teacher"]))
-        if exams.get(b["course_id"]):  # 連結到這門課的下一場考試
+        if exams.get(b["course_id"]):  # 連結到這門課的下一個考試 / 作業
             e = exams[b["course_id"]][0]
-            lines.append(f'<span style="color:#E5486F;font-weight:600">📝 考試 {e["datetime"][5:10].replace("-", "/")}</span>')
+            kind = "作業" if e.get("kind") == "homework" else "考試"
+            lines.append(f'<span style="color:#E5486F;font-weight:600">📝 {kind} {e["datetime"][5:10].replace("-", "/")}</span>')
         w = 100 / b["lanes"]
         cells.append(
             f'<div class="tt-c" style="grid-row:{b["i0"] + 2} / span {b["i1"] - b["i0"] + 1};'
@@ -279,7 +280,7 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
 # ---------- 頁面 ----------
 def _tab_overview(data: dict) -> None:
     if not data["courses"]:
-        st.info("還沒有課程，到「➕ 新增時段」填入第一門課吧！")
+        st.info("還沒有課程，到「新增時段」填入第一門課吧！")
         return
     table, orphans = grid_html(data)
     html(table)
@@ -327,7 +328,7 @@ def _tab_add(data: dict) -> None:
             t1.time_input("開始時間", key="tt_c_start", step=300)
             t2.time_input("結束時間", key="tt_c_end", step=300)
 
-    st.button("➕ 新增這個時段", type="primary", on_click=_add_slots)
+    st.button(label("add", "新增這個時段"), type="primary", on_click=_add_slots, key="tt_add_btn")
 
     # 訊息顯示在按鈕正下方，按下去立刻看得到結果
     msgs, ss.tt_msgs = ss.tt_msgs, []
@@ -347,7 +348,7 @@ def _tab_manage(data: dict) -> None:
         cid = c["id"]
         mine = sorted((s for s in data["slots"] if s["course_id"] == cid),
                       key=lambda s: (s["day"], to_min(s["start"])))
-        n_exam = f"　·　📝 {len(exams[cid])} 場考試" if exams.get(cid) else ""
+        n_exam = f"　·　📝 {len(exams[cid])} 項考試 / 作業" if exams.get(cid) else ""
         with st.expander(f"{c['name']}　·　{float(c.get('credits', 0)):g} 學分　·　{len(mine)} 個時段{n_exam}"):
             for e in exams.get(cid, []):
                 place = f"　{icon('pin')}{esc(e['place'])}" if e.get("place") else ""
@@ -383,7 +384,12 @@ def render() -> None:
     hero("我的課表", "依學校節次填入課程，同一門課可重複選用", "calendar")
     _init_state()
     data = load_data()
-    tab1, tab2, tab3 = st.tabs(["📆 我的課表", "➕ 新增時段", "📚 課程管理"])
+    # 分頁標籤與「新增這個時段」按鈕的 icon（標籤只能放純文字，icon 用 CSS 畫上）
+    html("<style>" + tab_css("tt_tabs", ["calendar", "add", "manage-dates"])
+         + before_css(".st-key-tt_add_btn button p", "add") + "</style>")
+    with st.container(key="tt_tabs"):
+        tab1, tab2, tab3 = st.tabs([label("calendar", "我的課表"), label("add", "新增時段"),
+                                    label("manage-dates", "課程管理")])
     with tab1:
         _tab_overview(data)
     with tab2:

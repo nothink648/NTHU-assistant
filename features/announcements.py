@@ -9,6 +9,7 @@ import re
 import streamlit as st
 
 from core import nthu_api
+from core.icons import icon
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 
@@ -66,7 +67,7 @@ def _row(a: dict) -> str:
 
 def render() -> None:
     html(CSS)
-    hero("校園公告", "各處室、系所網站的最新消息　·　資料來源 NTHU Data API", "📢")
+    hero("校園公告", "各處室、系所網站的最新消息　·　資料來源 NTHU Data API", "megaphone")
     items, err = load_announcements()
     if err:
         st.warning(err)
@@ -86,7 +87,7 @@ def render() -> None:
     key = f"ann_limit_{lang}_{dept}_{kw}"
     limit = st.session_state.get(key, PAGE_SIZE)
 
-    head = (f'<div class="card-head"><span class="card-title">{esc(dept if dept != ALL else "最新公告")}</span>'
+    head = (f'<div class="card-head"><span class="card-title">{icon("megaphone")}{esc(dept if dept != ALL else "最新公告")}</span>'
             f'{badge(f"{len(shown)} 則", "#6C63FF")}</div>')
     body = "".join(_row(a) for a in shown[:limit]) if shown else empty("🔍", "找不到符合的公告")
     html(card(head + body, "ann"))
@@ -97,4 +98,4 @@ def render() -> None:
             st.rerun()
 
 
-FEATURE = Feature(title="校園公告", icon="📢", render=render, slug="announcements")
+FEATURE = Feature(title="校園公告", icon="📢", render=render, slug="announcements", ico="megaphone")

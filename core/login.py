@@ -35,7 +35,7 @@ def render_login() -> None:
     with mid:
         html(f'<div class="login-brand"><div class="logo">{icon("cap")}</div><h1>{APP_TITLE}</h1>'
              f'<p>登入後，課表、考試與設定都只屬於你</p>'
-             f'<div class="login-perks"><span>{icon("calendar")} 個人課表</span><span>{icon("alarm")} 考試提醒</span>'
+             f'<div class="login-perks"><span>{icon("calendar")} 個人課表</span><span>{icon("alarm")} 考試 / 作業提醒</span>'
              f'<span>{icon("star")} 關注的公車路線</span></div></div>')
         if "auth_flash" in st.session_state:
             st.success(st.session_state.pop("auth_flash"))
