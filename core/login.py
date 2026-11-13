@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from config import APP_ICON, APP_TITLE
+from config import app_title
 from core import auth
+from core.i18n import lang_switch, t
 from core.icons import has, icon
 from core.ui import esc, html
 
@@ -33,31 +34,38 @@ def render_login() -> None:
     html(_CSS)
     _, mid, _ = st.columns([1, 1.25, 1])
     with mid:
-        html(f'<div class="login-brand"><div class="logo">{icon("cap")}</div><h1>{APP_TITLE}</h1>'
-             f'<p>登入後，課表、考試與設定都只屬於你</p>'
-             f'<div class="login-perks"><span>{icon("calendar")} 個人課表</span><span>{icon("alarm")} 考試 / 作業提醒</span>'
-             f'<span>{icon("star")} 關注的公車路線</span></div></div>')
+        _, sw = st.columns([3, 1])
+        with sw:
+            lang_switch()
+        html(f'<div class="login-brand"><div class="logo">{icon("cap")}</div><h1>{app_title()}</h1>'
+             f'<p>{t("登入後，課表、考試與設定都只屬於你", "Sign in to keep your timetable, exams and settings to yourself")}</p>'
+             f'<div class="login-perks"><span>{icon("calendar")} {t("個人課表", "Personal timetable")}</span>'
+             f'<span>{icon("alarm")} {t("考試 / 作業提醒", "Exam & homework reminders")}</span>'
+             f'<span>{icon("star")} {t("關注的公車路線", "Favorite bus routes")}</span></div></div>')
         if "auth_flash" in st.session_state:
             st.success(st.session_state.pop("auth_flash"))
-        tab_in, tab_up = st.tabs(["登入", "✨ 註冊新帳號"])
+        tab_in, tab_up = st.tabs([t("登入", "Sign in"), t("✨ 註冊新帳號", "✨ Create account")])
         with tab_in:
             with st.form("login"):
-                name = st.text_input("帳號", key="li_name")
-                pw = st.text_input("密碼", type="password", key="li_pw")
-                remember = st.checkbox(f"保持登入（{auth.REMEMBER_DAYS} 天）", value=True,
-                                       help="重新整理頁面也不用再登入；在公用電腦上請取消勾選")
-                if st.form_submit_button("登入", type="primary", use_container_width=True):
+                name = st.text_input(t("帳號", "Username"), key="li_name")
+                pw = st.text_input(t("密碼", "Password"), type="password", key="li_pw")
+                remember = st.checkbox(t(f"保持登入（{auth.REMEMBER_DAYS} 天）", f"Keep me signed in ({auth.REMEMBER_DAYS} days)"), value=True,
+                                       help=t("重新整理頁面也不用再登入；在公用電腦上請取消勾選",
+                                              "Stay signed in after refreshing; uncheck on shared computers"))
+                if st.form_submit_button(t("登入", "Sign in"), type="primary", use_container_width=True):
                     uid = auth.authenticate(name, pw)
                     if uid:
                         auth.login(uid, remember)
                         st.rerun()
-                    st.error("帳號或密碼錯誤")
+                    st.error(t("帳號或密碼錯誤", "Incorrect username or password"))
         with tab_up:
             with st.form("register"):
-                name = st.text_input("帳號", key="rg_name", help="2–20 個字，可用中文、英文、數字或底線")
-                pw = st.text_input("密碼", type="password", key="rg_pw", help=f"至少 {auth.MIN_PASSWORD} 個字元")
-                pw2 = st.text_input("再輸入一次密碼", type="password", key="rg_pw2")
-                if st.form_submit_button("建立帳號並登入", type="primary", use_container_width=True):
+                name = st.text_input(t("帳號", "Username"), key="rg_name",
+                                     help=t("2–20 個字，可用中文、英文、數字或底線", "2–20 characters: Chinese, letters, digits or underscores"))
+                pw = st.text_input(t("密碼", "Password"), type="password", key="rg_pw",
+                                   help=t(f"至少 {auth.MIN_PASSWORD} 個字元", f"At least {auth.MIN_PASSWORD} characters"))
+                pw2 = st.text_input(t("再輸入一次密碼", "Confirm password"), type="password", key="rg_pw2")
+                if st.form_submit_button(t("建立帳號並登入", "Create account and sign in"), type="primary", use_container_width=True):
                     uid, msg = auth.register(name, pw, pw2)
                     if uid:
                         auth.login(uid, remember=True)
@@ -71,18 +79,21 @@ def render_account(uid: str) -> None:
     name = auth.username(uid)
     with st.sidebar:
         html(_CSS + f'<div class="user-chip"><div class="av">{name[:1].upper()}</div>'
-             f'<div><div class="nm">{esc(name)}</div><div class="sm">已登入</div></div></div>')
-        with st.expander("帳號設定" if has("settings") else "⚙️ 帳號設定"):
+             f'<div><div class="nm">{esc(name)}</div><div class="sm">{t("已登入", "Signed in")}</div></div></div>')
+        lang_switch()
+        acct = t("帳號設定", "Account settings")
+        with st.expander(acct if has("settings") else "⚙️ " + acct):
             with st.form("chpw", clear_on_submit=True):
-                old = st.text_input("目前密碼", type="password")
-                new = st.text_input("新密碼", type="password")
-                new2 = st.text_input("再輸入一次新密碼", type="password")
-                if st.form_submit_button("更新密碼"):
+                old = st.text_input(t("目前密碼", "Current password"), type="password")
+                new = st.text_input(t("新密碼", "New password"), type="password")
+                new2 = st.text_input(t("再輸入一次新密碼", "Confirm new password"), type="password")
+                if st.form_submit_button(t("更新密碼", "Update password")):
                     ok, msg = auth.change_password(uid, old, new, new2)
                     (st.success if ok else st.error)(msg)
-        if st.button("登出" if has("logout") else "🚪 登出", use_container_width=True):
+        out = t("登出", "Sign out")
+        if st.button(out if has("logout") else "🚪 " + out, use_container_width=True, key="logout_btn"):
             auth.logout()
-            st.session_state.auth_flash = "已登出"
+            st.session_state.auth_flash = t("已登出", "Signed out")
             st.rerun()
     if "auth_welcome" in st.session_state:
         st.toast(st.session_state.pop("auth_welcome"), icon="🎉")

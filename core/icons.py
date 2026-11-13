@@ -115,6 +115,12 @@ def css(nav_icons: list[str]) -> str:
         ".muted .ico,.farea .ico{width:1em;height:1em;margin-right:2px;opacity:.85}",
         ".side-brand{display:flex;align-items:center;gap:10px;font-size:1.6rem;font-weight:800;letter-spacing:.5px;margin:6px 0 10px}",
         ".side-brand .ico{width:1.4em;height:1.4em;color:var(--acc-text)}",
+        # 「校園助手」標誌移到側邊欄最上方：放進頂端那一列（Streamlit 放 logo 的位置，收合按鈕在右邊），
+        # Streamlit 會把頁面導覽固定排在我們的內容前面，所以用絕對定位移上去
+        "[data-testid='stSidebarContent']{position:relative}",
+        "[data-testid='stSidebarUserContent'] :is([data-testid='stElementContainer'],.element-container):has(.side-brand)"
+        "{position:absolute!important;top:10px;left:1.5rem;right:3.5rem;width:auto!important;z-index:2}",
+        "[data-testid='stSidebarUserContent'] .side-brand{margin:0;height:40px;white-space:nowrap}",
     ]
     rules += [f".ico-{n}{{{_mask(n)}}}" for n in ICONS if has(n)]
     # 側邊欄導覽：用 ::before 畫 icon（Streamlit 的頁面 icon 只接受 emoji）
@@ -133,8 +139,8 @@ def css(nav_icons: list[str]) -> str:
         rules.append(side.format(sel="[data-testid='stSidebar'] [data-testid='stExpander'] summary p",
                                  mask=_mask("settings")))
     if has("key"):  # 所有密碼欄位（登入、註冊、修改密碼）的標題前加上鑰匙
-        rules.append(side.format(sel="[data-testid='stTextInput']:has(input[aria-label*='密碼']) label p",
+        rules.append(side.format(sel="[data-testid='stTextInput']:has(input[type='password']) label p",
                                  mask=_mask("key")))
     if has("logout"):
-        rules.append(side.format(sel="[data-testid='stSidebar'] .stButton button p", mask=_mask("logout")))
+        rules.append(side.format(sel="[data-testid='stSidebar'] .st-key-logout_btn button p", mask=_mask("logout")))
     return "\n".join(rules)

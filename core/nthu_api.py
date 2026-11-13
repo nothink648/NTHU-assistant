@@ -19,6 +19,7 @@ from typing import Any
 import streamlit as st
 
 from config import DATA_DIR
+from core.i18n import t
 
 API_BASE = "https://api.nthusa.tw"
 CACHE_DIR = DATA_DIR / "api_cache"
@@ -73,5 +74,7 @@ def get(path: str, params: dict | None = None, ttl: int = 600, refresh: bool = F
     except Exception:  # 網路錯誤、逾時、API 回 4xx/5xx、JSON 格式錯誤
         cached = _load_cache(url)
         if cached is not None:
-            return cached.get("data"), f"暫時連不上校園資料 API，目前顯示 {cached.get('saved_at', '先前')} 的資料"
-        return None, "暫時連不上校園資料 API，請稍後再試"
+            saved = cached.get("saved_at", "")
+            return cached.get("data"), t(f"暫時連不上校園資料 API，目前顯示 {saved or '先前'} 的資料",
+                                         f"Campus data API is unreachable; showing data from {saved or 'earlier'}")
+        return None, t("暫時連不上校園資料 API，請稍後再試", "Campus data API is unreachable, please try again later")

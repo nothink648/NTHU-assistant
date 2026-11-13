@@ -20,6 +20,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from config import DATA_DIR
+from core.i18n import t
 from core.storage import load_json, save_json, user_folder
 
 USERS_FILE = "users.json"
@@ -79,14 +80,14 @@ def register(username: str, password: str, confirm: str) -> tuple[str | None, st
     """回傳 (uid, 訊息)；失敗時 uid 為 None。"""
     username = username.strip()
     if not NAME_RE.match(username):
-        return None, "帳號需為 2–20 個字，可用中文、英文、數字或底線"
+        return None, t("帳號需為 2–20 個字，可用中文、英文、數字或底線", "Username must be 2–20 characters: Chinese, letters, digits or underscores")
     if len(password) < MIN_PASSWORD:
-        return None, f"密碼至少 {MIN_PASSWORD} 個字元"
+        return None, t(f"密碼至少 {MIN_PASSWORD} 個字元", f"Password must be at least {MIN_PASSWORD} characters")
     if password != confirm:
-        return None, "兩次輸入的密碼不一樣"
+        return None, t("兩次輸入的密碼不一樣", "The two passwords do not match")
     data = _load()
     if _find(data, username):
-        return None, "這個帳號已經有人使用"
+        return None, t("這個帳號已經有人使用", "This username is already taken")
     first = not data["users"]
     uid = uuid.uuid4().hex
     salt = secrets.token_hex(16)
@@ -95,7 +96,8 @@ def register(username: str, password: str, confirm: str) -> tuple[str | None, st
     _save(data)
     user_dir(uid)
     moved = _adopt_legacy(uid) if first else []
-    return uid, ("註冊成功！已把原本的課表與考試資料轉到你的帳號" if moved else "註冊成功！")
+    return uid, (t("註冊成功！已把原本的課表與考試資料轉到你的帳號", "Signed up! Your existing timetable and exams were moved to your account")
+                 if moved else t("註冊成功！", "Signed up!"))
 
 
 def authenticate(username: str, password: str) -> str | None:
@@ -112,18 +114,18 @@ def change_password(uid: str, old: str, new: str, confirm: str) -> tuple[bool, s
     data = _load()
     u = data["users"].get(uid)
     if not u or not hmac.compare_digest(_hash(old, u["salt"]), u["hash"]):
-        return False, "目前密碼不正確"
+        return False, t("目前密碼不正確", "Current password is incorrect")
     if len(new) < MIN_PASSWORD:
-        return False, f"新密碼至少 {MIN_PASSWORD} 個字元"
+        return False, t(f"新密碼至少 {MIN_PASSWORD} 個字元", f"New password must be at least {MIN_PASSWORD} characters")
     if new != confirm:
-        return False, "兩次輸入的新密碼不一樣"
+        return False, t("兩次輸入的新密碼不一樣", "The two new passwords do not match")
     u["salt"] = secrets.token_hex(16)
     u["hash"] = _hash(new, u["salt"])
     # 改密碼後，其他裝置的「保持登入」全部失效，只留目前這個
     keep = _token_key(st.session_state.get("auth_token") or "")
     data["tokens"] = {k: v for k, v in data["tokens"].items() if v.get("uid") != uid or k == keep}
     _save(data)
-    return True, "密碼已更新"
+    return True, t("密碼已更新", "Password updated")
 
 
 def username(uid: str | None) -> str:
@@ -159,9 +161,10 @@ def _revoke_token(token: str) -> None:
 
 # ---------- 與 Streamlit session 的銜接 ----------
 def _reset_session() -> None:
-    """換人登入 / 登出時清掉所有暫存狀態，避免看到上一個人的選項。"""
+    """換人登入 / 登出時清掉所有暫存狀態，避免看到上一個人的選項（介面語言保留）。"""
     for k in list(st.session_state.keys()):
-        del st.session_state[k]
+        if k != "lang":
+            del st.session_state[k]
 
 
 def login(uid: str, remember: bool) -> None:

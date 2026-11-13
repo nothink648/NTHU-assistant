@@ -10,13 +10,14 @@ from datetime import datetime
 
 import streamlit as st
 
-from config import APP_ICON, APP_TITLE, WEEKDAYS
+from config import app_title
 from core.auth import username
+from core.i18n import fmt_day, is_en, t, weekday
 from core.icons import icon
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
-from features.bus_schedule import (FOCUS, eta_text, focus_routes, get_directions, get_focus, get_next_buses,
-                                   load_bus_data, mark_html, route_color)
+from features.bus_schedule import (eta_text, focus_short, focus_routes, get_directions, get_focus, get_next_buses,
+                                   load_bus_data, mark_html, route_color, route_dir_label)
 from features.exam_reminder import (WARN_DAYS, countdown_text, course_html, exam_datetime, get_upcoming_exams,
                                     kind_badge, kind_name, links_html, when_html)
 from features.restaurants import all_restaurants, load_data as load_food, status
@@ -72,12 +73,26 @@ GREETINGS = [  # (開始小時, 結束小時, 句子)
     (18, 24, ["晚安，{name}，辛苦了 🌆", "{name}，今天也辛苦了 🌙", "晚上好 {name}，記得吃晚餐 🍛",
               "{name}，作業寫完了嗎？ 📝", "好好休息，{name}，明天見 ✨"]),
 ]
+GREETINGS_EN = [
+    (0, 5, ["It's late, {name}. Get some rest 🌙", "Still up, {name}? 🦉", "Late night, {name}? Stay hydrated 💧",
+            "Hello, night owl {name} 🌌", "{name}, tomorrow's problems can wait 😴"]),
+    (5, 11, ["Good morning, {name}! You've got this ☀️", "A fresh new day, {name} 🌱", "Morning, {name}! Had breakfast? 🥪",
+             "Early class, {name}? Hang in there ☕", "Good morning, {name}. It's going to be a good day 🌤️"]),
+    (11, 14, ["Good afternoon, {name}! Don't skip lunch 🍱", "What's for lunch, {name}? 🍜",
+              "Recharge a little, {name} 🔋", "Eat well, {name}, classes need energy 🍙", "Hi {name}, time for a break 😌"]),
+    (14, 18, ["Good afternoon, {name} ☕", "Keep it up this afternoon, {name} 💪", "Hi {name}, bubble tea time? 🧋",
+              "How are classes going, {name}? 📚", "Almost there, {name}, class is nearly over ⏳"]),
+    (18, 24, ["Good evening, {name}. Well done today 🌆", "You worked hard today, {name} 🌙",
+              "Evening, {name}! Remember to eat dinner 🍛", "Finished your homework, {name}? 📝",
+              "Rest well, {name}. See you tomorrow ✨"]),
+]
 
 
 def greeting(now: datetime, name: str = "") -> str:
-    """依目前時段，隨機挑一句問候語（沒有名稱時稱呼「同學」）。"""
-    lines = next(g for s, e, g in GREETINGS if s <= now.hour < e)
-    return random.choice(lines).format(name=name or "同學")
+    """依目前時段，隨機挑一句問候語（沒有名稱時稱呼「同學」/ "friend"）。"""
+    table = GREETINGS_EN if is_en() else GREETINGS
+    lines = next(g for s, e, g in table if s <= now.hour < e)
+    return random.choice(lines).format(name=name or t("同學", "friend"))
 
 
 def _head(title: str, extra: str = "") -> str:
@@ -97,8 +112,7 @@ def next_bus(now: datetime) -> tuple[str, int] | None:
         for d in get_directions(r, data.get("origin", "")):
             nxt = get_next_buses(d, now, n=1)
             if nxt and (best is None or nxt[0][1] < best[1]):
-                label = r.get("name", "") + ("" if d.get("name") == "發車" else f"・{d.get('name', '')}")
-                best = (f"{label} {nxt[0][0]}", nxt[0][1])
+                best = (f"{route_dir_label(r, d)} {nxt[0][0]}", nxt[0][1])
     return best
 
 
@@ -124,114 +138,121 @@ def stats_strip(now: datetime) -> str:
     cur = now.hour * 60 + now.minute
     items = today_classes(now)
     upcoming = [(s, c) for s, c in items if to_min(s["end"]) > cur]
+    cal_ico, today_lb = icon("calendar") or "📆", t("今日課程", "Today's classes")
+    n_cls = f"{len(items)}<small>{t('堂', ' classes')}</small>"
     if not items:
-        cls = stat(icon("calendar") or "📆", "#6C63FF", "今日課程", "0<small>堂</small>", "今天沒有課 😎")
+        cls = stat(cal_ico, "#6C63FF", today_lb, n_cls, t("今天沒有課 😎", "No classes today 😎"))
     elif upcoming:
         s, c = upcoming[0]
-        word = "上課中" if to_min(s["start"]) <= cur else "下一堂"
-        cls = stat(icon("calendar") or "📆", "#6C63FF", "今日課程", f"{len(items)}<small>堂</small>", f'{word}：{esc(c["name"])} {s["start"]}')
+        word = t("上課中", "Now") if to_min(s["start"]) <= cur else t("下一堂", "Next")
+        cls = stat(cal_ico, "#6C63FF", today_lb, n_cls, f'{word}{t("：", ": ")}{esc(c["name"])} {s["start"]}')
     else:
-        cls = stat(icon("calendar") or "📆", "#6C63FF", "今日課程", f"{len(items)}<small>堂</small>", "今天的課都上完了 🎉")
+        cls = stat(cal_ico, "#6C63FF", today_lb, n_cls, t("今天的課都上完了 🎉", "All done for today 🎉"))
 
     nb = next_bus(now)
     if nb:
         m = nb[1]
-        val = ("即將發車" if m < 1 else f"{m}<small>分</small>" if m < 60
-               else f"{m // 60}<small>時</small>{m % 60}<small>分</small>")
-        bus = stat(icon("bus") or "🚌", "#2E9E6A", "下一班公車", val, esc(nb[0]))
+        val = (t("即將發車", "Leaving") if m < 1 else f"{m}<small>{t('分', ' min')}</small>" if m < 60
+               else f"{m // 60}<small>{t('時', 'h ')}</small>{m % 60}<small>{t('分', 'm')}</small>")
+        bus = stat(icon("bus") or "🚌", "#2E9E6A", t("下一班公車", "Next bus"), val, esc(nb[0]))
     else:
-        bus = stat(icon("bus") or "🚌", "#2E9E6A", "下一班公車", "—", "今天已無班次")
+        bus = stat(icon("bus") or "🚌", "#2E9E6A", t("下一班公車", "Next bus"), "—", t("今天已無班次", "No more buses today"))
 
     exams = get_upcoming_exams(now)
     if exams:
         days = (exam_datetime(exams[0]).date() - now.date()).days
-        exam = stat(icon("alarm") or "📅", "#E5486F", "考試 / 作業", "今天" if days == 0 else f"{days}<small>天後</small>",
-                    f'{kind_name(exams[0])}：{esc(exams[0]["subject"])}')
+        exam = stat(icon("alarm") or "📅", "#E5486F", t("考試 / 作業", "Exams & homework"),
+                    t("今天", "Today") if days == 0 else f"{days}<small>{t('天後', ' days')}</small>",
+                    f'{kind_name(exams[0])}{t("：", ": ")}{esc(exams[0]["subject"])}')
     else:
-        exam = stat(icon("alarm") or "📅", "#E5486F", "考試 / 作業", "—", "目前沒有考試或作業 🎉")
+        exam = stat(icon("alarm") or "📅", "#E5486F", t("考試 / 作業", "Exams & homework"), "—",
+                    t("目前沒有考試或作業 🎉", "Nothing due 🎉"))
 
     opened, total = open_food(now)
-    food = stat(icon("food") or "🍱", "#E08A1E", "營業中餐廳", f"{len(opened)}<small>家</small>", f"校內共 {total} 家")
+    food = stat(icon("food") or "🍱", "#E08A1E", t("營業中餐廳", "Open now"), f"{len(opened)}<small>{t('家', ' places')}</small>",
+                t(f"校內共 {total} 家", f"{total} on campus"))
     return f'<div class="stats">{cls}{bus}{exam}{food}</div>'
 
 
 # ---------- 卡片 ----------
 def class_summary(now: datetime) -> str:
-    head = _head((icon("calendar") or "📆 ") + "今日課程", badge(WEEKDAYS[now.weekday()]))
+    head = _head((icon("calendar") or "📆 ") + t("今日課程", "Today's classes"), badge(weekday(now.weekday())))
     items = today_classes(now)
     if not items:
-        return card(head + _grow(empty("😎", "今天沒有課")))
+        return card(head + _grow(empty("😎", t("今天沒有課", "No classes today"))))
     cur = now.hour * 60 + now.minute
     rows = []
     for s, c in items:
         done = to_min(s["end"]) <= cur
         live = to_min(s["start"]) <= cur < to_min(s["end"])
         room = f'<span class="muted">　{icon("pin")}{esc(s["room"])}</span>' if s.get("room") else ""
-        tag = " " + badge("上課中", "#2E9E6A", live=True) if live else ""
+        tag = " " + badge(t("上課中", "Now"), "#2E9E6A", live=True) if live else ""
         rows.append(f'<div class="row {"dim" if done else ""}"><span class="t">{esc(c["name"])}{room}</span>'
                     f'<span class="e">{s["start"]}–{s["end"]}{tag}</span></div>')
     finished = sum(to_min(s["end"]) <= cur for s, _ in items)
     pct = round(finished / len(items) * 100)
-    bar = (f'<div class="foot"><div class="progress" title="今日進度 {finished}/{len(items)}">'
+    bar = (f'<div class="foot"><div class="progress" title="{t("今日進度", "Progress")} {finished}/{len(items)}">'
            f'<i style="width:{pct}%"></i></div>'
-           f'<div class="muted" style="margin-top:4px">已上完 {finished} / {len(items)} 堂</div></div>')
+           f'<div class="muted" style="margin-top:4px">'
+           f'{t(f"已上完 {finished} / {len(items)} 堂", f"{finished} of {len(items)} classes done")}</div></div>')
     return card(head + _grow("".join(rows)) + bar)
 
 
 def exam_summary(now: datetime) -> str:
     exams = get_upcoming_exams(now)
-    head = _head((icon("alarm") or "📅 ") + "下一個考試 / 作業", kind_badge(exams[0]) if exams else "")
+    head = _head((icon("alarm") or "📅 ") + t("下一個考試 / 作業", "Next exam / homework"),
+                 kind_badge(exams[0]) if exams else "")
     if not exams:
-        return card(head + _grow(empty("🎉", "目前沒有考試或作業")))
+        return card(head + _grow(empty("🎉", t("目前沒有考試或作業", "Nothing due"))))
     e = exams[0]
     dt = exam_datetime(e)
     urgent = (dt - now).days < WARN_DAYS
     main = (f'<div class="big">{esc(e["subject"])}</div>{course_html(e)}'
-            f'<div style="margin:4px 0">{badge("剩 " + countdown_text(dt, now), "#E5486F" if urgent else "#6C63FF", ico="hourglass")}</div>'
+            f'<div style="margin:4px 0">{badge(t("剩 ", "") + countdown_text(dt, now) + t("", " left"), "#E5486F" if urgent else "#6C63FF", ico="hourglass")}</div>'
             f'<div class="muted">{when_html(e, dt)}</div>{links_html(e)}')
     more = ""
     if len(exams) > 1:
         rest = "".join(f'<div class="row"><span class="t">{kind_badge(x)} {esc(x["subject"])}</span>'
                        f'<span class="e">{exam_datetime(x):%m/%d}</span></div>' for x in exams[1:4])
-        more = f'<div class="foot"><div class="muted">之後還有 {len(exams) - 1} 項</div>{rest}</div>'
+        more = f'<div class="foot"><div class="muted">{t(f"之後還有 {len(exams) - 1} 項", f"{len(exams) - 1} more")}</div>{rest}</div>'
     return card(head + _grow(main) + more, "exam urgent" if urgent else "exam")
 
 
 def bus_summary(now: datetime) -> str:
-    head = _head((icon("bus") or "🚌 ") + "最近一班公車", badge(FOCUS[get_focus()][1], "#2E9E6A", ico="star"))
+    head = _head((icon("bus") or "🚌 ") + t("最近一班公車", "Next buses"), badge(focus_short(get_focus()), "#2E9E6A", ico="star"))
     data, _ = load_bus_data()
     rows = []
     for r in focus_routes(data.get("routes", [])):  # 只看「關注路線」（在公車班表頁設定）
         for d in get_directions(r, data.get("origin", "")):
             nxt = get_next_buses(d, now, n=1)
             if nxt:
-                label = r.get("name", "") + ("" if d.get("name") == "發車" else f"・{d.get('name', '')}")
                 dot = f'<span class="line-dot sm" style="background:{route_color(r)}"></span>'
-                rows.append(f'<div class="row"><span class="t">{dot}{esc(label)}　{nxt[0][0]}{mark_html(nxt[0][2])}</span>'
+                rows.append(f'<div class="row"><span class="t">{dot}{esc(route_dir_label(r, d))}　{nxt[0][0]}{mark_html(nxt[0][2])}</span>'
                             f'<span class="e">{eta_text(nxt[0][1])}</span></div>')
     if not rows:
-        msg = "今天沒有班次" if now.weekday() >= 5 else "今天已無班次"
+        msg = t("今天沒有班次", "No buses today") if now.weekday() >= 5 else t("今天已無班次", "No more buses today")
         return card(head + _grow(empty("🌃", msg)) +
-                    '<div class="foot muted">可到「公車班表」切換關注路線</div>')
+                    f'<div class="foot muted">{t("可到「公車班表」切換關注路線", "Change favorite routes on the Bus page")}</div>')
     return card(head + _grow("".join(rows)))
 
 
 def food_summary(now: datetime) -> str:
     opened, _ = open_food(now)
-    head = _head((icon("food") or "🍱 ") + "現在營業的餐廳", badge(f"{len(opened)} 家", "#E08A1E") if opened else "")
+    head = _head((icon("food") or "🍱 ") + t("現在營業的餐廳", "Open restaurants"),
+                 badge(t(f"{len(opened)} 家", f"{len(opened)} open"), "#E08A1E") if opened else "")
     if not opened:
-        return card(head + _grow(empty("🌙", "目前沒有營業中的餐廳")))
+        return card(head + _grow(empty("🌙", t("目前沒有營業中的餐廳", "Nothing is open right now"))))
     rows = []
     for r, s in opened[:FOOD_ROWS]:
         if s["label"].startswith("24"):
-            right = "24 小時"
-        else:  # label：「營業中 · 至 21:00」或「即將打烊 · 21:00」
-            tag = badge("快打烊", "#E5486F", live=True) + " " if s["key"] == "closing" else ""
-            right = f'{tag}至 {esc(s["label"].rsplit(" ", 1)[-1])}'
+            right = t("24 小時", "24 hours")
+        else:  # label：「營業中 · 至 21:00」或「即將打烊 · 21:00」，最後一段是打烊時間
+            tag = badge(t("快打烊", "Closing soon"), "#E5486F", live=True) + " " if s["key"] == "closing" else ""
+            right = f'{tag}{t("至", "until")} {esc(s["label"].rsplit(" ", 1)[-1])}'
         rows.append(f'<div class="row"><span class="t">{esc(r["name"])}'
                     f'<span class="muted">　{esc(r.get("building", ""))}</span></span>'
                     f'<span class="e">{right}</span></div>')
-    more = (f'<div class="foot muted">還有 {len(opened) - FOOD_ROWS} 家營業中，到「校園餐廳」看全部</div>'
+    more = (f'<div class="foot muted">{t(f"還有 {len(opened) - FOOD_ROWS} 家營業中，到「校園餐廳」看全部", f"{len(opened) - FOOD_ROWS} more open, see Restaurants")}</div>'
             if len(opened) > FOOD_ROWS else "")
     return card(head + _grow("".join(rows)) + more)
 
@@ -240,8 +261,7 @@ def render() -> None:
     now = datetime.now()
     html(HOME_CSS)
     name = username(st.session_state.get("auth_uid"))
-    hero(greeting(now, name), f"{now:%Y/%m/%d}（{WEEKDAYS[now.weekday()]}）"
-                        f"　{now:%H:%M}　·　{APP_TITLE}", "home")
+    hero(greeting(now, name), f"{fmt_day(now, year=True)}　{now:%H:%M}　·　{app_title()}", "home")
     mq = marquee_html(now.date())  # 學校行事曆接下來的一個事件；API 與暫存都沒有資料時不顯示
     if mq:
         html(mq)
@@ -250,4 +270,5 @@ def render() -> None:
          f'{bus_summary(now)}{food_summary(now)}</div>')
 
 
-FEATURE = Feature(title="首頁", icon="🏠", render=render, slug="home", default=True, ico="home")
+FEATURE = Feature(title="首頁", icon="🏠", render=render, slug="home", default=True, ico="home",
+                  title_en="Home")

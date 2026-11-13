@@ -2,10 +2,18 @@
 from pathlib import Path
 
 APP_TITLE = "校園助手"
+APP_TITLE_EN = "Campus Assistant"
 APP_ICON = "🎓"
 
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
+
+
+
+def app_title() -> str:
+    from core.i18n import t  # 延遲 import：config 不依賴 streamlit
+    return t(APP_TITLE, APP_TITLE_EN)
+
 
 WEEKDAYS = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 

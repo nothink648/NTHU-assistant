@@ -50,8 +50,14 @@ python -m streamlit run app.py
 - `type`：`campus`（校本部）或 `nanda`（南大校區），「關注路線」依此分類；選擇存在 `data/settings.json`
 - 引號與逗號請用半形；寫錯時頁面會顯示提示
 
+## 中文 / English
+側邊欄（登入頁在右上方）的「🌐 English / 🌐 中文」按鈕可切換整個介面的語言，選擇會存在個人設定，下次登入自動套用。
+- 程式裡的文字寫成 `t("中文", "English")`（`core/i18n.py`），新增功能時照這個寫法即可
+- 外部資料（餐廳名稱、公告標題、圖書館消息等）沒有英文版，維持原文；行事曆有英文標題時以英文顯示
+- 校園公告在英文介面下，語言篩選預設為 English
+
 ## 淺色 / 深色 / 自動
-用 Streamlit 內建的主題切換：右上角 ⋮ → Settings → Theme（Light / Dark / Use system setting）。
+用 Streamlit 內建的主題切換：右上角 ⋮ → System / Light / Dark。選單裡的 Print、Record screen、Rerun、Clear cache 已隱藏（`.streamlit/config.toml` 的 `toolbarMode` 與 `core/ui.py` 的 CSS）。
 `.streamlit/config.toml` 刻意不設定 `[theme]`，預設就是跟隨系統（自動）。
 
 ## 課表節次

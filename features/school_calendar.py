@@ -9,8 +9,8 @@ from datetime import date, datetime, timedelta
 
 import streamlit as st
 
-from config import WEEKDAYS
 from core import nthu_api
+from core.i18n import fmt_day, is_en, t
 from core.icons import icon
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
@@ -21,6 +21,8 @@ PAGE_SIZE = 60  # 一次列出幾筆，按「顯示更多」再加
 SOON_DAYS = 14  # 幾天內的事件顯示倒數標籤
 DEFAULT_CALS = [{"id": "academic", "name": "國立清華大學行事曆"}, {"id": "library-main", "name": "總圖書館開館行事曆"},
                 {"id": "library-hss", "name": "人社分館開館行事曆"}, {"id": "library-nanda", "name": "南大分館開館行事曆"}]
+CAL_NAMES_EN = {"academic": "NTHU Academic Calendar", "library-main": "Main Library Hours",
+                "library-hss": "Humanities & Social Sciences Library Hours", "library-nanda": "Nanda Library Hours"}
 CAL_COLOR = {"academic": "#6C63FF", "library-main": "#2C8BC9", "library-hss": "#E08A1E", "library-nanda": "#2E9E6A"}
 
 CSS = """<style>
@@ -109,9 +111,16 @@ def next_event(today: date) -> dict | None:
     return next((e for e in events if e["start"] >= today), None)
 
 
+def titles(e: dict) -> tuple[str, str]:
+    """(主標題, 副標題)：中文介面以中文為主；英文介面有英文標題時以英文為主、中文放副標。"""
+    if is_en() and e["en"]:
+        return e["en"], e["zh"]
+    return e["zh"], e["en"]
+
+
 # ---------- 顯示 ----------
 def day_label(d: date) -> str:
-    return f"{d:%m/%d}（{WEEKDAYS[d.weekday()]}）"
+    return fmt_day(d)
 
 
 def range_label(e: dict) -> str:
@@ -123,14 +132,18 @@ def range_label(e: dict) -> str:
 
 def countdown(e: dict, today: date) -> str:
     days = (e["start"] - today).days
-    return "今天" if days == 0 else "明天" if days == 1 else f"{days} 天後"
+    if days == 0:
+        return t("今天", "Today")
+    if days == 1:
+        return t("明天", "Tomorrow")
+    return t(f"{days} 天後", f"in {days} days")
 
 
 def status_badge(e: dict, today: date) -> str:
     if e["last"] < today:
-        return badge("已結束", "#888888")
+        return badge(t("已結束", "Ended"), "#888888")
     if e["start"] <= today:
-        return badge("今天" if e["start"] == e["last"] else "進行中", "#2E9E6A", live=True)
+        return badge(t("今天", "Today") if e["start"] == e["last"] else t("進行中", "Ongoing"), "#2E9E6A", live=True)
     if (e["start"] - today).days <= SOON_DAYS:
         return badge(countdown(e, today), "#E5486F" if (e["start"] - today).days <= 3 else "#6C63FF")
     return ""
@@ -141,27 +154,30 @@ def marquee_html(today: date) -> str:
     e = next_event(today)
     if not e:
         return ""
-    en = f'<span class="en">{esc(e["en"])}</span>' if e["en"] else ""
-    return (f'{MARQUEE_CSS}<div class="mq">{badge("行事曆 · " + countdown(e, today), "#6C63FF", ico="event")}'
-            f'<div class="track"><span class="roll"><span class="when">{esc(range_label(e))}</span>{esc(e["zh"])}{en}</span></div></div>')
+    main, sub = titles(e)
+    sub = f'<span class="en">{esc(sub)}</span>' if sub else ""
+    return (f'{MARQUEE_CSS}<div class="mq">{badge(t("行事曆", "Calendar") + " · " + countdown(e, today), "#6C63FF", ico="event")}'
+            f'<div class="track"><span class="roll"><span class="when">{esc(range_label(e))}</span>{esc(main)}{sub}</span></div></div>')
 
 
 def _row(e: dict, today: date) -> str:
-    en = f'<span class="cal-en">{esc(e["en"])}</span>' if e["en"] else ""
+    main, sub = titles(e)
+    en = f'<span class="cal-en">{esc(sub)}</span>' if sub else ""
     desc = f'<span class="cal-en">{esc(e["description"])}</span>' if e.get("description") else ""
     dim = " dim" if e["last"] < today else ""
-    return (f'<div class="row cal-row{dim}"><span class="t">{esc(e["zh"])}{en}{desc}</span>'
+    return (f'<div class="row cal-row{dim}"><span class="t">{esc(main)}{en}{desc}</span>'
             f'<span class="e">{esc(range_label(e))} {status_badge(e, today)}</span></div>')
 
 
 def render() -> None:
     today = date.today()
     html(CSS)
-    hero("學校行事曆", "清華大學行事曆　·　圖書館開館日曆　·　資料來源 NTHU Data API", "school")
+    hero(t("學校行事曆", "School Calendar"), t("清華大學行事曆　·　圖書館開館日曆　·　資料來源 NTHU Data API",
+                                           "NTHU academic calendar　·　Library hours　·　Source: NTHU Data API"), "school")
 
     cals = list_calendars()
-    names = {c["id"]: c.get("name") or c["id"] for c in cals}
-    cal_id = st.radio("行事曆", list(names), format_func=names.get, horizontal=True, label_visibility="collapsed")
+    names = {c["id"]: (CAL_NAMES_EN.get(c["id"]) if is_en() else None) or c.get("name") or c["id"] for c in cals}
+    cal_id = st.radio(t("行事曆", "Calendar"), list(names), format_func=names.get, horizontal=True, label_visibility="collapsed")
     events, err = load_events(cal_id, today)
     if err:
         st.warning(err)
@@ -169,20 +185,22 @@ def render() -> None:
 
     nxt = next((e for e in events if e["start"] >= today), None)
     if nxt:
-        en = f'<div class="muted">{esc(nxt["en"])}</div>' if nxt["en"] else ""
-        html(card(f'<div class="card-head"><span class="card-title">{icon("event") or "⏭️ "}接下來</span>'
+        main, sub = titles(nxt)
+        en = f'<div class="muted">{esc(sub)}</div>' if sub else ""
+        html(card(f'<div class="card-head"><span class="card-title">{icon("event") or "⏭️ "}{t("接下來", "Up next")}</span>'
                   f'{badge(countdown(nxt, today), color, live=True)}</div>'
-                  f'<div class="big">{esc(nxt["zh"])}</div>{en}'
+                  f'<div class="big">{esc(main)}</div>{en}'
                   f'<div class="muted" style="margin-top:6px">🗓️ {esc(range_label(nxt))}</div>', "cal-next"))
 
     c1, c2 = st.columns([3, 1])
-    keyword = c1.text_input("搜尋", placeholder="搜尋事件，例如：選課、期中、放假", label_visibility="collapsed")
-    show_past = c2.toggle("顯示已結束", value=False)
+    keyword = c1.text_input(t("搜尋", "Search"), placeholder=t("搜尋事件，例如：選課、期中、放假", "Search events, e.g. course selection, midterm"),
+                            label_visibility="collapsed")
+    show_past = c2.toggle(t("顯示已結束", "Show past"), value=False)
 
     shown = [e for e in events if (show_past or e["last"] >= today)
              and (not keyword.strip() or keyword.strip().lower() in (e["title"] + (e["description"] or "")).lower())]
     if not shown:
-        html(card(empty("🔍" if keyword else "📭", "找不到符合的事件" if keyword else "目前沒有事件")))
+        html(card(empty("🔍" if keyword else "📭", t("找不到符合的事件", "No matching events") if keyword else t("目前沒有事件", "No events"))))
         return
 
     key = f"cal_limit_{cal_id}"
@@ -191,14 +209,15 @@ def render() -> None:
     for e in shown[:limit]:
         months.setdefault((e["start"].year, e["start"].month), []).append(e)
     for (y, m), items in months.items():
-        head = (f'<div class="card-head"><span class="card-title">{icon("event")}{y} 年 {m} 月</span>'
-                f'{badge(f"{len(items)} 件", color)}</div>')
+        head = (f'<div class="card-head"><span class="card-title">{icon("event")}{t(f"{y} 年 {m} 月", date(y, m, 1).strftime("%B %Y"))}</span>'
+                f'{badge(t(f"{len(items)} 件", f"{len(items)} events"), color)}</div>')
         html(card(head + "".join(_row(e, today) for e in items)))
 
     if len(shown) > limit:
-        if st.button(f"顯示更多（還有 {len(shown) - limit} 件）", use_container_width=True):
+        if st.button(t(f"顯示更多（還有 {len(shown) - limit} 件）", f"Show more ({len(shown) - limit} left)"), use_container_width=True):
             st.session_state[key] = limit + PAGE_SIZE
             st.rerun()
 
 
-FEATURE = Feature(title="學校行事曆", icon="🗓️", render=render, slug="school-calendar", ico="school")
+FEATURE = Feature(title="學校行事曆", icon="🗓️", render=render, slug="school-calendar", ico="school",
+                  title_en="School Calendar")

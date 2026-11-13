@@ -1,14 +1,14 @@
 """入口：streamlit run app.py"""
 import streamlit as st
 
-from config import APP_ICON, APP_TITLE
+from config import APP_ICON, app_title
 from core.auth import current_uid, sync_cookie
 from core.login import render_account, render_login
 from core import icons
 from core.ui import inject_css
 from features import FEATURES
 
-st.set_page_config(page_title=APP_TITLE, page_icon=icons.path("cap") or APP_ICON, layout="wide")
+st.set_page_config(page_title=app_title(), page_icon=icons.path("cap") or APP_ICON, layout="wide")
 inject_css(icons.css([f.ico for f in FEATURES]))
 
 uid = current_uid()
@@ -18,7 +18,7 @@ if not uid:  # 未登入：只顯示登入 / 註冊畫面
     st.stop()
 
 pages = [
-    st.Page(f.render, title=f.title, icon=None if icons.has(f.ico) else f.icon,
+    st.Page(f.render, title=f.label(), icon=None if icons.has(f.ico) else f.icon,
             url_path=None if f.default else f.slug, default=f.default)
     for f in FEATURES
 ]
@@ -30,6 +30,6 @@ if current:  # 目前所在頁面：icon 與底色用主題色（舊版 Streamli
                 f"{{background:var(--acc-soft)!important;box-shadow:inset 3px 0 0 var(--acc)}}"
                 f"[data-testid='stSidebarNavItems'] li:nth-child({current}) [data-testid='stSidebarNavLink']::before"
                 f"{{background:var(--acc)!important;opacity:1!important}}</style>", unsafe_allow_html=True)
-st.sidebar.markdown(f'<div class="side-brand">{icons.icon("cap")}{APP_TITLE}</div>', unsafe_allow_html=True)
+st.sidebar.markdown(f'<div class="side-brand">{icons.icon("cap")}{app_title()}</div>', unsafe_allow_html=True)
 render_account(uid)
 nav.run()

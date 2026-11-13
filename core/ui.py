@@ -56,6 +56,8 @@ _CSS = """
   50%{transform:translate(-8%,4%) rotate(-12deg) scale(.95)}100%{transform:translate(5%,-6%) rotate(8deg) scale(1.1)}}
 @keyframes dotsDrift{from{transform:translate3d(0,0,0)}to{transform:translate3d(34px,68px,0)}}
 [data-testid="stHeader"]{background:transparent!important}
+/* 右上角選單只留主題切換：隱藏 Print、Record screen（Rerun / Clear cache / Deploy 由 config.toml 的 toolbarMode="viewer" 隱藏） */
+[data-testid="stMainMenuItem-print"],[data-testid="stMainMenuItem-recordScreencast"],[data-testid="stMainMenuDivider"]{display:none!important}
 /* 寫登入 cookie 用的隱形元件（見 core/auth.py）不佔版面 */
 :is([data-testid="stElementContainer"],.element-container):has(iframe[srcdoc*="nthu_assistant_s"]){display:none!important}
 [data-testid="stExpander"] details{background:var(--solid)}

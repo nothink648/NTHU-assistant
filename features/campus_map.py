@@ -9,6 +9,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from core.i18n import is_en, t
 from core.ui import hero
 from features.base import Feature
 
@@ -16,6 +17,10 @@ MAP_URL = "https://3dcampusguide.nthu.edu.tw/?openExternalBrowser=1"
 ROADS_FILE = Path(__file__).resolve().parent.parent / "static" / "maps" / "campus_roads.jpg"
 ROADS_URL = "/app/static/maps/campus_roads.jpg"  # 需 .streamlit/config.toml 開 enableStaticServing
 SIZES = {"小": 480, "中": 650, "大": 850}  # 視窗高度（px）
+SIZES_EN = {"小": "Small", "中": "Medium", "大": "Large"}
+# 2D 道路圖檢視器裡的文字（英文介面時替換）
+VIEWER_EN = {"清華校園道路圖": "NTHU campus road map", "放大": "Zoom in", "縮小": "Zoom out", "整張顯示": "Fit",
+             "滾輪 / ＋－ 縮放　·　拖曳移動　·　雙擊放大": "Scroll / ＋－ to zoom　·　drag to move　·　double-click to zoom in"}
 
 # 2D 地圖檢視器：純前端的縮放 / 拖曳，不需重新執行 Python
 VIEWER = """
@@ -97,24 +102,31 @@ setTimeout(() => { document.getElementById('hint').style.opacity = 0; }, 4000);
 
 
 def render() -> None:
-    hero("校園地圖", "3D 校園導覽　·　2D 校園道路圖", "map")
+    hero(t("校園地圖", "Campus Map"), t("3D 校園導覽　·　2D 校園道路圖", "3D campus tour　·　2D road map"), "map")
 
     c1, c2 = st.columns([3, 1], vertical_alignment="center")
-    size = c1.radio("視窗大小", list(SIZES), index=1, horizontal=True, key="map_size")
-    tab_3d, tab_2d = st.tabs(["3D 校園導覽", "2D 校園道路圖"])
+    size = c1.radio(t("視窗大小", "Window size"), list(SIZES), index=1, horizontal=True, key="map_size",
+                    format_func=lambda k: t(k, SIZES_EN[k]))
+    tab_3d, tab_2d = st.tabs([t("3D 校園導覽", "3D campus tour"), t("2D 校園道路圖", "2D road map")])
 
     with tab_3d:
-        st.link_button("↗ 在新分頁開啟 3D 導覽", MAP_URL)
+        st.link_button(t("↗ 在新分頁開啟 3D 導覽", "↗ Open the 3D tour in a new tab"), MAP_URL)
         components.iframe(MAP_URL, height=SIZES[size], scrolling=False)
-        st.caption("地圖由國立清華大學 3D 校園導覽提供。若視窗內無法載入，請改用「在新分頁開啟」。")
+        st.caption(t("地圖由國立清華大學 3D 校園導覽提供。若視窗內無法載入，請改用「在新分頁開啟」。",
+                     "Map by the NTHU 3D campus guide. If it doesn't load here, open it in a new tab."))
 
     with tab_2d:
         if not ROADS_FILE.exists():
-            st.warning("找不到 static/maps/campus_roads.jpg")
+            st.warning(t("找不到 static/maps/campus_roads.jpg", "static/maps/campus_roads.jpg not found"))
         else:
-            st.link_button("↗ 在新分頁開啟原圖", ROADS_URL)
-            components.html(VIEWER.replace("__SRC__", ROADS_URL), height=SIZES[size])
-            st.caption("清華校園道路圖：各道路行經的館舍（校園規劃組、駐警隊製，113.12.30 更新底圖）。")
+            st.link_button(t("↗ 在新分頁開啟原圖", "↗ Open the full image in a new tab"), ROADS_URL)
+            viewer = VIEWER.replace("__SRC__", ROADS_URL)
+            if is_en():
+                for zh, en in VIEWER_EN.items():
+                    viewer = viewer.replace(zh, en)
+            components.html(viewer, height=SIZES[size])
+            st.caption(t("清華校園道路圖：各道路行經的館舍（校園規劃組、駐警隊製，113.12.30 更新底圖）。",
+                         "NTHU campus road map: buildings along each road (by Campus Planning and Campus Police, base map updated 2024-12-30)."))
 
 
-FEATURE = Feature(title="校園地圖", icon="🗺️", render=render, slug="map", ico="map")
+FEATURE = Feature(title="校園地圖", icon="🗺️", render=render, slug="map", ico="map", title_en="Campus Map")

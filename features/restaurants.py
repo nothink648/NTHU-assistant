@@ -19,6 +19,7 @@ from datetime import date, datetime
 
 import streamlit as st
 
+from core.i18n import t
 from core.storage import load_json, save_json
 from core.icons import has, icon
 from core.ui import badge, esc, hero, html
@@ -240,8 +241,8 @@ def fmt_min(m: int) -> str:
 
 def fmt_ranges(ranges: list[tuple[int, int]]) -> str:
     if ranges == [(0, 1440)]:
-        return "24 小時"
-    return "、".join(f"{fmt_min(s)}–{fmt_min(e)}" for s, e in ranges)
+        return t("24 小時", "24 hours")
+    return t("、", ", ").join(f"{fmt_min(s)}–{fmt_min(e)}" for s, e in ranges)
 
 
 def status(r: dict, now: datetime) -> dict:
@@ -256,23 +257,25 @@ def status(r: dict, now: datetime) -> dict:
         ranges = [x for x in ranges if x[0] < 15 * 60]
     cur = now.hour * 60 + now.minute
     if closed or n_closed:
-        key, label = "closed", "今日公休"
+        key, label = "closed", t("今日公休", "Closed today")
     elif not ranges:
-        key, label = "closed", "今日未營業"
+        key, label = "closed", t("今日未營業", "Not open today")
     else:
         live = next((x for x in ranges if x[0] <= cur < x[1]), None)
         upcoming = next((x for x in ranges if x[0] > cur), None)
         if live and live == (0, 1440):
-            key, label = "open", "24 小時營業"
+            key, label = "open", t("24 小時營業", "24 hours open")
         elif live:
             left = live[1] - cur
             key = "closing" if left <= 30 else "open"
-            label = f"即將打烊 · {fmt_min(live[1])}" if key == "closing" else f"營業中 · 至 {fmt_min(live[1])}"
+            end = fmt_min(live[1])  # 首頁取 label 最後一段當打烊時間，兩種語言都要以時間結尾
+            label = (t(f"即將打烊 · {end}", f"Closing soon · {end}") if key == "closing"
+                     else t(f"營業中 · 至 {end}", f"Open · until {end}"))
         elif upcoming:
-            key, label = "later", f"{fmt_min(upcoming[0])} 開始營業"
+            key, label = "later", t(f"{fmt_min(upcoming[0])} 開始營業", f"Opens at {fmt_min(upcoming[0])}")
         else:
-            key, label = "done", "今日已打烊"
-    today = "今日公休" if key == "closed" else fmt_ranges(ranges)
+            key, label = "done", t("今日已打烊", "Closed for today")
+    today = t("今日公休", "Closed today") if key == "closed" else fmt_ranges(ranges)
     return {"key": key, "label": label, "today": today, "irregular": irregular,
             "is_open": key in ("open", "closing")}
 
@@ -281,9 +284,10 @@ def week_lines(r: dict) -> str:
     s = r.get("schedule") or {}
     wk, sa, su = s.get("weekday", ""), s.get("saturday", ""), s.get("sunday", "")
     if wk == sa == su:
-        label = "時間" if re.search(r"[週周]|假日", wk) else "每日"  # 文字本身已寫星期就不加「每日」
+        label = t("時間", "Hours ") if re.search(r"[週周]|假日", wk) else t("每日", "Daily ")  # 文字已寫星期就不加「每日」
         return f"<b>{label}</b>{esc(wk)}"
-    return f"<b>平日</b>{esc(wk)}<br><b>週六</b>{esc(sa)}<br><b>週日</b>{esc(su)}"
+    return (f"<b>{t('平日', 'Weekdays ')}</b>{esc(wk)}<br><b>{t('週六', 'Sat ')}</b>{esc(sa)}"
+            f"<br><b>{t('週日', 'Sun ')}</b>{esc(su)}")
 
 
 # ---------- 卡片 ----------
@@ -296,7 +300,7 @@ def restaurant_card(r: dict, st_: dict, extra_cls: str = "") -> str:
     return (f'<div class="card {off} {extra_cls}"><div class="fhead">{img}<div>'
             f'<div class="fname">{esc(r["name"])}</div><div class="farea">{icon("pin")} {area}</div></div></div>'
             f'<div>{badge(st_["label"], STATUS_STYLE[st_["key"]], live=st_["is_open"])}</div>'
-            f'<div class="ftoday">今日　{esc(st_["today"])}</div>'
+            f'<div class="ftoday">{t("今日", "Today")}　{esc(st_["today"])}</div>'
             f'<div class="fweek">{week_lines(r)}</div>{note}{phone}</div>')
 
 
@@ -335,18 +339,21 @@ def reel_html(spin: dict, animate: bool) -> str:
 def _roulette(rests: list[dict], stats: dict[str, dict], buildings: list[str]) -> None:
     ss = st.session_state
     with st.container(border=True):
-        html(f'<div style="font-weight:700">{icon("dice")} 今天吃什麼？<span class="muted">　讓轉盤幫你決定</span></div>')
+        html(f'<div style="font-weight:700">{icon("dice")} {t("今天吃什麼？", "What should I eat?")}'
+             f'<span class="muted">　{t("讓轉盤幫你決定", "Let the wheel decide")}</span></div>')
         c1, c2 = st.columns([3, 2], vertical_alignment="bottom")
-        picked = c1.multiselect("抽選範圍", buildings, default=buildings, key="food_areas",
-                                placeholder="全部區域")
-        only_open = c2.toggle("只抽現在營業中的", value=True, key="food_only_open")
+        picked = c1.multiselect(t("抽選範圍", "Areas"), buildings, default=buildings, key="food_areas",
+                                placeholder=t("全部區域", "All areas"))
+        only_open = c2.toggle(t("只抽現在營業中的", "Only places open now"), value=True, key="food_only_open")
         areas = set(picked or buildings)
         cands = [r for r in rests if r["is_food"] and r["building"] in areas
                  and (not only_open or stats[r["id"]]["is_open"])]
-        st.button(f"{'' if has('dice') else '🎲 '}隨機選一間（{len(cands)} 間候選）", type="primary", on_click=_spin, args=(cands,),
+        st.button(("" if has("dice") else "🎲 ") + t(f"隨機選一間（{len(cands)} 間候選）", f"Pick one ({len(cands)} candidates)"),
+                  type="primary", on_click=_spin, args=(cands,),
                   disabled=not cands, key="food_spin_btn")
         if not cands:
-            st.caption("目前沒有符合條件的餐廳，試著關掉「只抽現在營業中的」或放寬範圍。")
+            st.caption(t("目前沒有符合條件的餐廳，試著關掉「只抽現在營業中的」或放寬範圍。",
+                         "No matching restaurants. Try turning off “Only places open now” or choosing more areas."))
 
         spin = ss.get("food_spin")
         if spin:
@@ -361,13 +368,13 @@ def _roulette(rests: list[dict], stats: dict[str, dict], buildings: list[str]) -
 # ---------- 頁面 ----------
 def render() -> None:
     html(_CSS)
-    hero("校園餐廳", "營業時間一覽　·　選擇困難就交給轉盤", "food")
+    hero(t("校園餐廳", "Restaurants"), t("營業時間一覽　·　選擇困難就交給轉盤", "Opening hours　·　Can't decide? Spin the wheel"), "food")
     if "food_flash" in st.session_state:
         st.toast(st.session_state.pop("food_flash"), icon="✅")
     data = load_data()
     rests = all_restaurants(data)
     if not rests:
-        st.warning("還沒有餐廳資料，請按下方「從官網更新」。")
+        st.warning(t("還沒有餐廳資料，請按下方「從官網更新」。", "No restaurant data yet. Use “Update from website” below."))
     now = datetime.now()
     stats = {r["id"]: status(r, now) for r in rests}
     buildings = list(dict.fromkeys(r["building"] for r in rests))
@@ -377,13 +384,15 @@ def render() -> None:
 
         n_open = sum(stats[r["id"]]["is_open"] for r in rests if r["is_food"])
         n_food = sum(r["is_food"] for r in rests)
-        st.markdown(f"#### {icon('clock') or '🕘'} 營業時間　{badge(f'現在營業 {n_open} / {n_food} 間餐廳', '#2E9E6A', live=n_open > 0)}",
+        open_txt = t(f"現在營業 {n_open} / {n_food} 間餐廳", f"{n_open} of {n_food} open now")
+        st.markdown(f"#### {icon('clock') or '🕘'} {t('營業時間', 'Opening hours')}　{badge(open_txt, '#2E9E6A', live=n_open > 0)}",
                     unsafe_allow_html=True)
         f1, f2, f3 = st.columns([3, 1.3, 1.3], vertical_alignment="bottom")
-        q = f1.text_input("搜尋", placeholder="店名或位置，例如：咖哩、風雲2樓", key="food_q",
+        q = f1.text_input(t("搜尋", "Search"), placeholder=t("店名或位置，例如：咖哩、風雲2樓", "Name or location (in Chinese), e.g. 咖哩"),
+                          key="food_q",
                           label_visibility="collapsed")
-        open_only = f2.toggle("只看營業中", key="food_open_only")
-        show_service = f3.toggle("顯示服務類店家", key="food_service")
+        open_only = f2.toggle(t("只看營業中", "Open now only"), key="food_open_only")
+        show_service = f3.toggle(t("顯示服務類店家", "Show services"), key="food_service")
 
         def match(r: dict) -> bool:
             if not show_service and not r["is_food"]:
@@ -396,32 +405,34 @@ def render() -> None:
             return True
 
         order = {"open": 0, "closing": 1, "later": 2, "done": 3, "closed": 4}
-        tabs = st.tabs(["全部"] + buildings)
+        tabs = st.tabs([t("全部", "All")] + buildings)
         for tab, bname in zip(tabs, [None] + buildings):
             with tab:
                 items = [r for r in rests if (bname is None or r["building"] == bname) and match(r)]
                 items.sort(key=lambda r: order[stats[r["id"]]["key"]])
                 if not items:
-                    st.info("沒有符合條件的店家。")
+                    st.info(t("沒有符合條件的店家。", "No matching places."))
                     continue
                 html('<div class="food-grid">' + "".join(restaurant_card(r, stats[r["id"]]) for r in items) + "</div>")
 
-    with st.expander("ℹ️ 資料來源與更新"):
-        updated = data.get("updated", "")
-        st.markdown(f"資料來自 [清華總務處經營管理組 — 餐廳及服務性廠商]({SOURCE_URL})"
-                    + (f"，最後更新：{updated.replace('T', ' ')}" if updated else ""))
-        st.caption("營業狀態是從官網文字推算的；國定假日、寒暑假與臨時公休請以店家公告為準。")
-        if st.button("🔄 從官網更新", key="food_refresh"):
+    with st.expander(t("ℹ️ 資料來源與更新", "ℹ️ Data source & updates")):
+        updated = data.get("updated", "").replace("T", " ")
+        st.markdown(t(f"資料來自 [清華總務處經營管理組 — 餐廳及服務性廠商]({SOURCE_URL})",
+                      f"Data from [NTHU General Affairs — Restaurants & services]({SOURCE_URL})")
+                    + (t(f"，最後更新：{updated}", f", last updated {updated}") if updated else ""))
+        st.caption(t("營業狀態是從官網文字推算的；國定假日、寒暑假與臨時公休請以店家公告為準。",
+                     "Open/closed status is inferred from the website text; check with each shop for holidays and closures."))
+        if st.button(t("🔄 從官網更新", "🔄 Update from website"), key="food_refresh"):
             try:
-                with st.spinner("正在抓取官網資料…"):
+                with st.spinner(t("正在抓取官網資料…", "Fetching from the website…")):
                     new = fetch_from_site()
                 save_json(DATA_FILE, new)
                 st.session_state.pop("food_spin", None)
                 n = sum(len(b.get("restaurants", [])) for b in new["buildings"])
-                st.session_state.food_flash = f"已從官網更新 {n} 間店家"
+                st.session_state.food_flash = t(f"已從官網更新 {n} 間店家", f"Updated {n} places from the website")
                 st.rerun()
             except Exception as e:  # 網路錯誤、官網改版等
-                st.error(f"更新失敗：{e}")
+                st.error(t(f"更新失敗：{e}", f"Update failed: {e}"))
 
 
-FEATURE = Feature(title="校園餐廳", icon="🍱", render=render, slug="food", ico="food")
+FEATURE = Feature(title="校園餐廳", icon="🍱", render=render, slug="food", ico="food", title_en="Restaurants")
