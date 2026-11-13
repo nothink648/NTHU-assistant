@@ -222,3 +222,6 @@ __marimo__/
 # 校園助手：帳號與個人資料（密碼雜湊、課表、考試）不進版控
 data/users.json
 data/users/
+
+# NTHU Data API 的暫存（連不上 API 時的備援資料，會自動產生）
+data/api_cache/

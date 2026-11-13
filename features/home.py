@@ -19,6 +19,7 @@ from features.bus_schedule import (FOCUS, eta_text, focus_routes, get_directions
 from features.exam_reminder import (WARN_DAYS, countdown_text, course_html, exam_datetime,
                                     get_upcoming_exams, links_html)
 from features.restaurants import all_restaurants, load_data as load_food, status
+from features.school_calendar import marquee_html
 from features.timetable import to_min, today_classes
 
 FOOD_ROWS = 6  # 首頁最多列幾間營業中的餐廳
@@ -233,6 +234,9 @@ def render() -> None:
     name = username(st.session_state.get("auth_uid"))
     hero(greeting(now), f"{name + '　·　' if name else ''}{now:%Y/%m/%d}（{WEEKDAYS[now.weekday()]}）"
                         f"　{now:%H:%M}　·　{APP_TITLE}", "home")
+    mq = marquee_html(now.date())  # 學校行事曆接下來的一個事件；API 與暫存都沒有資料時不顯示
+    if mq:
+        html(mq)
     html(stats_strip(now))
     html(f'<div class="home home-grid">{class_summary(now)}{exam_summary(now)}'
          f'{bus_summary(now)}{food_summary(now)}</div>')
