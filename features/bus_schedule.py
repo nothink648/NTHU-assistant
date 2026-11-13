@@ -31,9 +31,10 @@ import pandas as pd
 import streamlit as st
 
 from config import DATA_DIR
+from core import nthu_api
 from core.storage import load_user_json, save_user_json
 from core.icons import icon
-from core.ui import badge, empty, esc, hero, html
+from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 
 DATA_FILE = "bus_schedule.json"
@@ -53,6 +54,18 @@ FOCUS = {  # 關注路線 -> (選項文字, 首頁標籤, 包含的 type；None 
 }
 DEFAULT_FOCUS = "campus"
 PER_ROW = 3  # 「即將發車」每列最多幾張卡片
+
+# 「到站時間」分頁：資料來自 NTHU Data API 的 /buses/schedule?stop=...（依官方時刻表推算，不是 GPS）
+API_LINES = {  # API 的 line -> (名稱, 顏色)
+    "main_green": ("綠線", "#2E9E6A"),
+    "main_red": ("紅線", "#E5486F"),
+    "nanda_route_1": ("南大線一", "#2F7FD8"),
+    "nanda_route_2": ("南大線二", "#9B59D0"),
+}
+BUS_TYPES = {"large-sized_bus": "大型巴士", "middle-sized_bus": "中型巴士"}
+DEFAULT_STOPS = ["北校門口", "綜二館", "楓林小徑", "人社院&生科館", "台積館", "奕園停車場",
+                 "教育學院大樓&南門停車場", "南大校區校門口右側(食品路校牆邊)"]
+ARRIVAL_ROWS = 8  # 到站時間最多列幾班
 
 
 # ---------- 資料邏輯 ----------
@@ -108,6 +121,61 @@ def set_focus(focus: str) -> None:
     data = data if isinstance(data, dict) else {}
     data["bus_focus"] = focus
     save_user_json(SETTINGS_FILE, data)
+
+
+def get_stop() -> str | None:
+    """使用者在「到站時間」選的站點（個人設定）。"""
+    data = load_user_json(SETTINGS_FILE, {})
+    return data.get("bus_stop") if isinstance(data, dict) else None
+
+
+def set_stop(stop: str) -> None:
+    data = load_user_json(SETTINGS_FILE, {})
+    data = data if isinstance(data, dict) else {}
+    data["bus_stop"] = stop
+    save_user_json(SETTINGS_FILE, data)
+
+
+def list_stops() -> list[str]:
+    data, _ = nthu_api.get("/buses/stops", ttl=86400)
+    names = [s["name"] for s in data or [] if isinstance(s, dict) and s.get("name")]
+    return names or DEFAULT_STOPS
+
+
+def _hhmm_min(text: str) -> int | None:
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", str(text or "").strip())
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
+def stop_arrivals(stop: str, now: datetime) -> tuple[list[dict], str | None]:
+    """接下來會到 stop 的公車，依抵達時間排序。每筆：line、名稱、顏色、抵達時間、幾分鐘後、往哪、沿途各站時間。"""
+    data, err = nthu_api.get("/buses/schedule", {"stop": stop, "day": "current", "details": "true",
+                                                 "limit": ARRIVAL_ROWS + 6}, ttl=60)
+    cur = now.hour * 60 + now.minute
+    result = []
+    for b in data or []:
+        if not isinstance(b, dict):
+            continue
+        info = b.get("dep_info") or {}
+        arrive = _hhmm_min(b.get("arrive_time"))
+        if arrive is None or arrive < cur:
+            continue  # 已經過站
+        stops = [s for s in b.get("stops_time") or [] if isinstance(s, dict) and s.get("stop")]
+        name, color = API_LINES.get(info.get("line"), (info.get("line") or "公車", "#6C63FF"))
+        result.append({"name": name, "color": color, "arrive": b.get("arrive_time"), "mins": arrive - cur,
+                       "dest": stops[-1]["stop"] if stops else "", "origin": stops[0]["stop"] if stops else "",
+                       "dep": info.get("time") or "", "bus_type": BUS_TYPES.get(info.get("bus_type"), ""),
+                       "stops": stops, "note": info.get("description") or ""})
+    result.sort(key=lambda x: x["mins"])
+    return result[:ARRIVAL_ROWS], err
+
+
+def arrival_text(mins: int) -> str:
+    if mins < 1:
+        return "即將到站"
+    if mins >= 60:
+        return f"{mins // 60} 小時 {mins % 60} 分後"
+    return f"{mins} 分鐘後"
 
 
 def focus_routes(routes: list[dict], focus: str | None = None) -> list[dict]:
@@ -232,6 +300,55 @@ def route_card(route: dict, now: datetime, default_origin: str) -> str:
             f'{head}{note}{"".join(parts)}</div>')
 
 
+ARRIVAL_CSS = """<style>
+.arr .row{align-items:flex-start}
+.arr .t{flex:1;min-width:0}
+.arr .path{display:block;font-weight:400;font-size:.78rem;opacity:.62;margin-top:3px;line-height:1.5}
+.arr .path b{opacity:1;color:var(--acc-text)}
+.arr .e{flex:none;text-align:right}
+.arr .at{display:block;font-size:1.15rem;font-weight:800}
+</style>"""
+
+
+def arrivals_tab(now: datetime) -> None:
+    stops = list_stops()
+    saved = get_stop()
+    if st.session_state.get("bus_stop") not in stops:  # 第一次進來：帶入上次選的站
+        st.session_state["bus_stop"] = saved if saved in stops else stops[0]
+    st.selectbox("📍 我在哪一站", stops, key="bus_stop", on_change=_save_stop)
+    stop = st.session_state["bus_stop"]
+
+    items, err = stop_arrivals(stop, now)
+    if err:
+        st.warning(err)
+    head = (f'<div class="card-head"><span class="card-title">{icon("pin")} {esc(stop)}</span>'
+            f'{badge("接下來到站", "#2E9E6A", live=True)}</div>')
+    if not items:
+        msg = "今天已沒有公車會經過這一站" if not err else "暫時查不到到站資料"
+        html(ARRIVAL_CSS + card(head + empty("🌃", msg), "arr"))
+    else:
+        rows = []
+        for b in items:
+            dot = f'<span class="line-dot sm" style="background:{b["color"]}"></span>'
+            title = f'{dot}<span style="color:color-mix(in srgb,{b["color"]} 85%,currentColor)">{esc(b["name"])}</span>'
+            dest = f"　往 {esc(b['dest'])}" if b["dest"] and b["dest"] != stop else "　終點站"
+            first = b["origin"] == stop
+            path = " → ".join(
+                f"<b>{esc(s['stop'])} {esc(s.get('arrive_time', ''))}</b>" if s["stop"] == stop
+                else f"{esc(s['stop'])} {esc(s.get('arrive_time', ''))}" for s in b["stops"])
+            parts = ["本站發車" if first else f"{esc(b['origin'])} {esc(b['dep'])} 發車" if b["dep"] else ""]
+            for x in (b["bus_type"], esc(b["note"])):  # 班表的備註常常也寫「大型巴士」，不重複顯示
+                if x and x not in parts:
+                    parts.append(x)
+            extra = "　·　".join(x for x in parts if x)
+            soon = "#E5486F" if b["mins"] <= 3 else "#2E9E6A"
+            rows.append(f'<div class="row"><span class="t">{title}{dest}<span class="path">{extra}<br>{path}</span></span>'
+                        f'<span class="e"><span class="at">{esc(b["arrive"])}</span>'
+                        f'{badge(arrival_text(b["mins"]), soon, live=b["mins"] <= 3)}</span></div>')
+        html(ARRIVAL_CSS + card(head + "".join(rows), "arr"))
+    st.caption("到站時間依官方時刻表推算，並非 GPS 即時位置；尖峰時段或下雨時可能誤點幾分鐘。資料來源：NTHU Data API")
+
+
 def timetable_df(entries: list[tuple[str, str]]) -> pd.DataFrame:
     df = pd.DataFrame({"發車時間": [t for t, _ in entries]})
     if any(mk for _, mk in entries):
@@ -270,7 +387,10 @@ def render() -> None:
     elif now.weekday() == 4:
         st.info("今天是週五，標 ♦ 的南大線班次停駛，下方已自動略過。")
 
-    tab_next, tab_all = st.tabs(["⏱️ 即將發車", "📋 完整時刻表"])
+    tab_stop, tab_next, tab_all = st.tabs(["📍 到站時間", "⏱️ 即將發車", "📋 完整時刻表"])
+
+    with tab_stop:
+        arrivals_tab(now)
 
     with tab_next:
         for i in range(0, len(routes), PER_ROW):
@@ -313,6 +433,13 @@ def _save_focus() -> None:
     focus = st.session_state.get("bus_focus", DEFAULT_FOCUS)
     set_focus(focus)
     st.toast(f"首頁將顯示：{FOCUS[focus][1]}的公車", icon="⭐")
+
+
+def _save_stop() -> None:
+    stop = st.session_state.get("bus_stop")
+    if stop:
+        set_stop(stop)
+        st.toast(f"已記住你的站點：{stop}", icon="📍")
 
 
 FEATURE = Feature(title="公車班表", icon="🚌", render=render, slug="bus", ico="bus")

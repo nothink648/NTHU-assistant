@@ -37,12 +37,12 @@ MARQUEE_CSS = """<style>
 .mq .track{flex:1;min-width:0;overflow:hidden;white-space:nowrap;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);
           mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
-.mq .track span{display:inline-block;padding-left:100%;font-weight:600;animation:mqScroll 20s linear infinite}
-.mq:hover .track span{animation-play-state:paused}
+.mq .roll{display:inline-block;padding-left:100%;font-weight:600;animation:mqScroll 20s linear infinite}
+.mq:hover .roll{animation-play-state:paused}
 .mq .when{color:var(--acc-text);font-weight:800;margin-right:10px}
 .mq .en{opacity:.6;font-weight:400;margin-left:10px}
 @keyframes mqScroll{from{transform:translateX(0)}to{transform:translateX(-100%)}}
-@media (prefers-reduced-motion:reduce){.mq .track span{padding-left:0}}
+@media (prefers-reduced-motion:reduce){.mq .roll{padding-left:0}}
 </style>"""
 
 _CJK = re.compile(r"[　-〿㐀-鿿＀-￯]")
@@ -142,7 +142,7 @@ def marquee_html(today: date) -> str:
         return ""
     en = f'<span class="en">{esc(e["en"])}</span>' if e["en"] else ""
     return (f'{MARQUEE_CSS}<div class="mq">{badge("行事曆 · " + countdown(e, today), "#6C63FF", live=True)}'
-            f'<div class="track"><span><span class="when">{esc(range_label(e))}</span>{esc(e["zh"])}{en}</span></div></div>')
+            f'<div class="track"><span class="roll"><span class="when">{esc(range_label(e))}</span>{esc(e["zh"])}{en}</span></div></div>')
 
 
 def _row(e: dict, today: date) -> str:
