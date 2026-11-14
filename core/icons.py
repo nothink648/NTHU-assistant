@@ -39,13 +39,22 @@ ICONS = {  # 名稱 -> 用途
     "manage-dates": "課程管理",
     "time-list": "完整時刻表",
     "arrow-up": "箭頭（用 rotate 轉成其他方向）",
+    "mail-box": "沒有資料（圖書館開館資訊）",
+    "web": "網站 / 語言切換",
+    "telephone": "電話",
+    "phone": "分機",
+    "fax": "傳真",
+    "mail": "Email",
+    "contact-book": "通訊錄",
+    "sport": "體育場館",
 }
 FALLBACK = {  # 圖檔不存在時改用的 emoji
     "home": "🏠", "calendar": "📆", "alarm": "📅", "food": "🍱", "bus": "🚌", "map": "🗺️", "clock": "🕘",
     "settings": "⚙️", "key": "🔑", "logout": "🚪", "star": "⭐", "hourglass": "⏳", "person": "👤",
     "pin": "📍", "cap": "🎓", "dice": "🎲", "school": "🏫", "event": "🗓️", "megaphone": "📢", "book": "📚",
     "refresh": "🔄", "chair": "🪑", "news": "📰", "search": "🔍", "add": "➕", "manage-dates": "📚",
-    "time-list": "📋", "arrow-up": "⬆️",
+    "time-list": "📋", "arrow-up": "⬆️", "mail-box": "📭", "web": "🌐", "telephone": "☎️", "phone": "📞",
+    "fax": "📠", "mail": "✉️", "contact-book": "📇", "sport": "🏀",
 }
 ARROWS = {0: "⬆️", 90: "➡️", 180: "⬇️", 270: "⬅️"}  # arrow-up 旋轉角度 -> 沒有圖時的 emoji
 
@@ -143,4 +152,10 @@ def css(nav_icons: list[str]) -> str:
                                  mask=_mask("key")))
     if has("logout"):
         rules.append(side.format(sel="[data-testid='stSidebar'] .st-key-logout_btn button p", mask=_mask("logout")))
+    if has("web"):  # 登入頁右上角的語言選單：前面畫地球
+        for sel in (".st-key-login_lang_box .react-aria-ComboBox > [role='group']",  # Streamlit 1.5x+
+                    ".st-key-login_lang_box [data-baseweb='select'] > div:first-child"):  # 舊版
+            rules.append(side.format(sel=sel, mask=_mask("web"))
+                         .replace("display:inline-block", "display:block;align-self:center")
+                         .replace("margin-right:8px", "margin:0 -2px 0 10px;opacity:.8"))
     return "\n".join(rules)

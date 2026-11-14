@@ -128,6 +128,26 @@ def change_password(uid: str, old: str, new: str, confirm: str) -> tuple[bool, s
     return True, t("密碼已更新", "Password updated")
 
 
+def change_username(uid: str, new_name: str, password: str) -> tuple[bool, str]:
+    """改帳號名稱（需要目前密碼）。個人資料夾是用 uid 命名的，所以資料不用搬。"""
+    data = _load()
+    u = data["users"].get(uid)
+    if not u or not hmac.compare_digest(_hash(password, u["salt"]), u["hash"]):
+        return False, t("目前密碼不正確", "Current password is incorrect")
+    new_name = new_name.strip()
+    if not NAME_RE.match(new_name):
+        return False, t("帳號需為 2–20 個字，可用中文、英文、數字或底線",
+                        "Username must be 2–20 characters: Chinese, letters, digits or underscores")
+    if new_name == u["username"]:
+        return False, t("新帳號名稱和目前的一樣", "That is already your username")
+    other = _find(data, new_name)
+    if other and other != uid:  # 只改大小寫（Ian → ian）時找到的是自己，允許
+        return False, t("這個帳號已經有人使用", "This username is already taken")
+    u["username"] = new_name
+    _save(data)
+    return True, t(f"帳號名稱已改為「{new_name}」，下次請用新名稱登入", f"Username changed to “{new_name}”. Use it next time you sign in")
+
+
 def username(uid: str | None) -> str:
     return _load()["users"].get(uid or "", {}).get("username", "")
 

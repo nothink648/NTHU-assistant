@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from core import nthu_api
-from core.i18n import is_en, t
+from core.i18n import is_en, t, tr
 from core.icons import before_css, icon, label, tab_css
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
@@ -101,7 +101,7 @@ def hours_tab() -> None:
         now_titles = on(today)
         head = f'<div class="card-head"><span class="card-title">{icon("book")}{name}</span>{badge(t("今天", "Today"), color, live=True)}</div>'
         today_html = ('<div class="lib-today">' + "".join(f"<div>{esc(x)}</div>" for x in now_titles) + "</div>"
-                      if now_titles else empty("📭", t("今天沒有登錄的開館資訊", "No hours listed for today")))
+                      if now_titles else empty(icon("mail-box") or "📭", t("今天沒有登錄的開館資訊", "No hours listed for today")))
         rows = []
         for i in range(1, HOURS_DAYS):
             d = today + timedelta(days=i)
@@ -175,7 +175,7 @@ def lost_tab() -> None:
     if place != places[0]:
         df = df[df["拾獲地點"] == place]
     html(badge(t(f"{len(df)} 件", f"{len(df)} items"), "#E08A1E"))
-    st.dataframe(df.rename(columns=LOST_COLS) if is_en() else df, hide_index=True, use_container_width=True)
+    st.dataframe(df.rename(columns={k: tr(v) for k, v in LOST_COLS.items()}) if is_en() else df, hide_index=True, use_container_width=True)
 
 
 def render() -> None:

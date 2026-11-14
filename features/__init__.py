@@ -1,6 +1,6 @@
 """功能註冊表：新增功能時，在這裡 import 並加進 FEATURES 就會自動出現在側邊欄。"""
 from features import (announcements, bus_schedule, campus_map, exam_reminder, home, library, restaurants,
-                      school_calendar, timetable)
+                      school_calendar, sports, timetable)
 
 FEATURES = [
     home.FEATURE,
@@ -9,6 +9,7 @@ FEATURES = [
     school_calendar.FEATURE,
     announcements.FEATURE,
     library.FEATURE,
+    sports.FEATURE,
     restaurants.FEATURE,
     bus_schedule.FEATURE,
     campus_map.FEATURE,

@@ -12,7 +12,7 @@ import streamlit as st
 
 from config import app_title
 from core.auth import username
-from core.i18n import fmt_day, is_en, t, weekday
+from core.i18n import fmt_day, is_en, t, tr, weekday
 from core.icons import icon
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
@@ -92,7 +92,8 @@ def greeting(now: datetime, name: str = "") -> str:
     """依目前時段，隨機挑一句問候語（沒有名稱時稱呼「同學」/ "friend"）。"""
     table = GREETINGS_EN if is_en() else GREETINGS
     lines = next(g for s, e, g in table if s <= now.hour < e)
-    return random.choice(lines).format(name=name or t("同學", "friend"))
+    line = random.choice(lines)
+    return (tr(line) if is_en() else line).format(name=name or t("同學", "friend"))  # 印尼文 / 越南文由英文翻譯
 
 
 def _head(title: str, extra: str = "") -> str:
@@ -244,11 +245,11 @@ def food_summary(now: datetime) -> str:
         return card(head + _grow(empty("🌙", t("目前沒有營業中的餐廳", "Nothing is open right now"))))
     rows = []
     for r, s in opened[:FOOD_ROWS]:
-        if s["label"].startswith("24"):
+        if s.get("allday"):
             right = t("24 小時", "24 hours")
-        else:  # label：「營業中 · 至 21:00」或「即將打烊 · 21:00」，最後一段是打烊時間
+        else:
             tag = badge(t("快打烊", "Closing soon"), "#E5486F", live=True) + " " if s["key"] == "closing" else ""
-            right = f'{tag}{t("至", "until")} {esc(s["label"].rsplit(" ", 1)[-1])}'
+            right = f'{tag}{t("至", "until")} {esc(s.get("end") or "")}'
         rows.append(f'<div class="row"><span class="t">{esc(r["name"])}'
                     f'<span class="muted">　{esc(r.get("building", ""))}</span></span>'
                     f'<span class="e">{right}</span></div>')

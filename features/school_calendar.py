@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 import streamlit as st
 
 from core import nthu_api
-from core.i18n import fmt_day, is_en, t
+from core.i18n import fmt_day, is_en, month_year, t, tr
 from core.icons import icon
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
@@ -176,7 +176,7 @@ def render() -> None:
                                            "NTHU academic calendar　·　Library hours　·　Source: NTHU Data API"), "school")
 
     cals = list_calendars()
-    names = {c["id"]: (CAL_NAMES_EN.get(c["id"]) if is_en() else None) or c.get("name") or c["id"] for c in cals}
+    names = {c["id"]: (tr(CAL_NAMES_EN[c["id"]]) if is_en() and c["id"] in CAL_NAMES_EN else None) or c.get("name") or c["id"] for c in cals}
     cal_id = st.radio(t("行事曆", "Calendar"), list(names), format_func=names.get, horizontal=True, label_visibility="collapsed")
     events, err = load_events(cal_id, today)
     if err:
@@ -209,7 +209,7 @@ def render() -> None:
     for e in shown[:limit]:
         months.setdefault((e["start"].year, e["start"].month), []).append(e)
     for (y, m), items in months.items():
-        head = (f'<div class="card-head"><span class="card-title">{icon("event")}{t(f"{y} 年 {m} 月", date(y, m, 1).strftime("%B %Y"))}</span>'
+        head = (f'<div class="card-head"><span class="card-title">{icon("event")}{month_year(y, m)}</span>'
                 f'{badge(t(f"{len(items)} 件", f"{len(items)} events"), color)}</div>')
         html(card(head + "".join(_row(e, today) for e in items)))
 

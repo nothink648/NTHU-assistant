@@ -1,8 +1,7 @@
 """🍱 校園餐廳：顯示各餐廳營業時間、現在是否營業，並提供「隨機選一間」轉盤。
 
-資料來源：清華總務處經營管理組「餐廳及服務性廠商」頁面
-（網頁把資料寫在 JavaScript 的 restaurantsData 變數裡），存在 data/restaurants.json。
-頁面底部的「從官網更新」按鈕可以重新抓取。
+資料來源：NTHU Data API 的 /dining（整理自清華總務處經營管理組「餐廳及服務性廠商」頁面），
+每小時自動更新；API 連不上時改用最後一次成功的暫存，再不行才用 data/restaurants.json（離線備份）。
 
 營業時間是官網的自由文字（例如「週一至週五7:30-19:30,假日8:30-14:30」、
 「11月每周六暫停營業」），這裡盡量解析成「現在營業中 / 休息中 / 今日公休」，
@@ -10,22 +9,22 @@
 """
 from __future__ import annotations
 
-import ast
 import random
 import re
-import urllib.request
 import uuid
 from datetime import date, datetime
 
 import streamlit as st
 
 from core.i18n import t
-from core.storage import load_json, save_json
+from core import nthu_api
+from core.storage import load_json
 from core.icons import has, icon
 from core.ui import badge, esc, hero, html
 from features.base import Feature
 
-DATA_FILE = "restaurants.json"
+DATA_FILE = "restaurants.json"  # 離線備份（API 與暫存都沒有資料時才用）
+API_TTL = 3600  # 秒
 SOURCE_URL = "https://ddfm.site.nthu.edu.tw/p/404-1494-256455.php?Lang=zh-tw"
 SERVICE_WORDS = ("眼鏡", "洗衣", "理髮", "打字", "書苑", "書局", "郵局", "影印")  # 非餐廳，不參加轉盤
 HIDDEN_NAMES = {"straight a"}  # 不想顯示的店家（小寫）；從官網更新後也會被排除
@@ -84,11 +83,16 @@ _CSS = """
 
 
 # ---------- 資料 ----------
-def load_data() -> dict:
+def load_data(refresh: bool = False) -> dict:
+    """{buildings: [{building, restaurants: [...]}], error: 提示訊息或 None, offline: 是否用離線備份}。"""
+    buildings, err = nthu_api.get("/dining", ttl=API_TTL, refresh=refresh)
+    if isinstance(buildings, list) and buildings:
+        return {"buildings": buildings, "error": err, "offline": False}
     data = load_json(DATA_FILE, {})
     if isinstance(data, list):  # 只有清單時視為 buildings
         data = {"buildings": data}
     data.setdefault("buildings", [])
+    data.update(error=err or t("餐廳 API 沒有資料", "The dining API returned no data"), offline=True)
     return data
 
 
@@ -111,29 +115,6 @@ def all_restaurants(data: dict) -> list[dict]:
             r["is_food"] = not any(w in r["name"] for w in SERVICE_WORDS)
             out.append(r)
     return out
-
-
-def fetch_from_site() -> dict:
-    """從官網重新抓資料。官網把資料寫成 JS 陣列（Python 字面值格式），用 literal_eval 安全解析。"""
-    req = urllib.request.Request(SOURCE_URL, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        text = resp.read().decode("utf-8", errors="replace")
-    key = "restaurantsData ="
-    i = text.index(key) + len(key)
-    i = text.index("[", i)
-    depth, j = 0, i
-    for j, ch in enumerate(text[i:], i):
-        if ch == "[":
-            depth += 1
-        elif ch == "]":
-            depth -= 1
-            if depth == 0:
-                break
-    buildings = ast.literal_eval(text[i:j + 1])
-    if not isinstance(buildings, list) or not buildings:
-        raise ValueError("官網資料格式改變，找不到餐廳清單")
-    return {"source": SOURCE_URL, "updated": datetime.now().isoformat(timespec="minutes"),
-            "buildings": buildings}
 
 
 # ---------- 營業時間解析 ----------
@@ -256,6 +237,7 @@ def status(r: dict, now: datetime) -> dict:
     elif meal == "dinner":
         ranges = [x for x in ranges if x[0] < 15 * 60]
     cur = now.hour * 60 + now.minute
+    allday, end = False, None  # 首頁用：是否 24 小時、營業中的打烊時間
     if closed or n_closed:
         key, label = "closed", t("今日公休", "Closed today")
     elif not ranges:
@@ -264,11 +246,11 @@ def status(r: dict, now: datetime) -> dict:
         live = next((x for x in ranges if x[0] <= cur < x[1]), None)
         upcoming = next((x for x in ranges if x[0] > cur), None)
         if live and live == (0, 1440):
-            key, label = "open", t("24 小時營業", "24 hours open")
+            key, label, allday = "open", t("24 小時營業", "24 hours open"), True
         elif live:
             left = live[1] - cur
             key = "closing" if left <= 30 else "open"
-            end = fmt_min(live[1])  # 首頁取 label 最後一段當打烊時間，兩種語言都要以時間結尾
+            end = fmt_min(live[1])
             label = (t(f"即將打烊 · {end}", f"Closing soon · {end}") if key == "closing"
                      else t(f"營業中 · 至 {end}", f"Open · until {end}"))
         elif upcoming:
@@ -276,7 +258,7 @@ def status(r: dict, now: datetime) -> dict:
         else:
             key, label = "done", t("今日已打烊", "Closed for today")
     today = t("今日公休", "Closed today") if key == "closed" else fmt_ranges(ranges)
-    return {"key": key, "label": label, "today": today, "irregular": irregular,
+    return {"key": key, "label": label, "today": today, "irregular": irregular, "allday": allday, "end": end,
             "is_open": key in ("open", "closing")}
 
 
@@ -373,8 +355,10 @@ def render() -> None:
         st.toast(st.session_state.pop("food_flash"), icon="✅")
     data = load_data()
     rests = all_restaurants(data)
+    if data.get("error"):
+        st.warning(data["error"] + (t("（目前顯示離線備份資料）", " (showing offline backup data)") if data.get("offline") and rests else ""))
     if not rests:
-        st.warning(t("還沒有餐廳資料，請按下方「從官網更新」。", "No restaurant data yet. Use “Update from website” below."))
+        st.info(t("目前沒有餐廳資料，請稍後再試。", "No restaurant data right now. Please try again later."))
     now = datetime.now()
     stats = {r["id"]: status(r, now) for r in rests}
     buildings = list(dict.fromkeys(r["building"] for r in rests))
@@ -416,23 +400,17 @@ def render() -> None:
                 html('<div class="food-grid">' + "".join(restaurant_card(r, stats[r["id"]]) for r in items) + "</div>")
 
     with st.expander(t("ℹ️ 資料來源與更新", "ℹ️ Data source & updates")):
-        updated = data.get("updated", "").replace("T", " ")
-        st.markdown(t(f"資料來自 [清華總務處經營管理組 — 餐廳及服務性廠商]({SOURCE_URL})",
-                      f"Data from [NTHU General Affairs — Restaurants & services]({SOURCE_URL})")
-                    + (t(f"，最後更新：{updated}", f", last updated {updated}") if updated else ""))
-        st.caption(t("營業狀態是從官網文字推算的；國定假日、寒暑假與臨時公休請以店家公告為準。",
-                     "Open/closed status is inferred from the website text; check with each shop for holidays and closures."))
-        if st.button(t("🔄 從官網更新", "🔄 Update from website"), key="food_refresh"):
-            try:
-                with st.spinner(t("正在抓取官網資料…", "Fetching from the website…")):
-                    new = fetch_from_site()
-                save_json(DATA_FILE, new)
-                st.session_state.pop("food_spin", None)
+        st.markdown(t(f"資料來自 [NTHU Data API](https://api.nthusa.tw/docs)（整理自 [清華總務處經營管理組 — 餐廳及服務性廠商]({SOURCE_URL})），每小時自動更新。",
+                      f"Data from the [NTHU Data API](https://api.nthusa.tw/docs) (based on [NTHU General Affairs — Restaurants & services]({SOURCE_URL})), refreshed hourly."))
+        st.caption(t("營業狀態是從營業時間文字推算的；國定假日、寒暑假與臨時公休請以店家公告為準。",
+                     "Open/closed status is inferred from the listed hours; check with each shop for holidays and closures."))
+        if st.button(t("🔄 立即更新", "🔄 Refresh now"), key="food_refresh"):
+            new = load_data(refresh=True)
+            st.session_state.pop("food_spin", None)
+            if not new.get("offline"):
                 n = sum(len(b.get("restaurants", [])) for b in new["buildings"])
-                st.session_state.food_flash = t(f"已從官網更新 {n} 間店家", f"Updated {n} places from the website")
-                st.rerun()
-            except Exception as e:  # 網路錯誤、官網改版等
-                st.error(t(f"更新失敗：{e}", f"Update failed: {e}"))
+                st.session_state.food_flash = t(f"已更新 {n} 間店家", f"Updated {n} places")
+            st.rerun()
 
 
 FEATURE = Feature(title="校園餐廳", icon="🍱", render=render, slug="food", ico="food", title_en="Restaurants")

@@ -9,7 +9,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from core.i18n import is_en, t
+from core.i18n import is_en, t, tr
 from core.ui import hero
 from features.base import Feature
 
@@ -123,7 +123,7 @@ def render() -> None:
             viewer = VIEWER.replace("__SRC__", ROADS_URL)
             if is_en():
                 for zh, en in VIEWER_EN.items():
-                    viewer = viewer.replace(zh, en)
+                    viewer = viewer.replace(zh, tr(en))
             components.html(viewer, height=SIZES[size])
             st.caption(t("清華校園道路圖：各道路行經的館舍（校園規劃組、駐警隊製，113.12.30 更新底圖）。",
                          "NTHU campus road map: buildings along each road (by Campus Planning and Campus Police, base map updated 2024-12-30)."))

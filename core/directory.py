@@ -78,17 +78,17 @@ def contact_html(u: dict, people: bool = True) -> str:
     lines = []
     site = (c.get("website") or "").strip()
     if SAFE_URL.match(site):
-        lines.append(f'{icon("globe") or "🌐"} {_link(site, t("單位網站", "Website"))}')
+        lines.append(f'{icon("web")} {_link(site, t("單位網站", "Website"))}')
     if c.get("phone"):
-        lines.append(f'☎️ {esc(c["phone"])}')
+        lines.append(f'{icon("telephone")} {esc(c["phone"])}')
     if c.get("extension"):
-        lines.append(f'📞 {t("分機", "Ext.")} {esc(c["extension"])}')
+        lines.append(f'{icon("phone")} {t("分機", "Ext.")} {esc(c["extension"])}')
     if c.get("fax"):
-        lines.append(f'📠 {t("傳真", "Fax")} {esc(c["fax"])}')
+        lines.append(f'{icon("fax")} {t("傳真", "Fax")} {esc(c["fax"])}')
     if c.get("email"):
-        lines.append(f'✉️ {_mail(c["email"])}')
+        lines.append(f'{icon("mail")} {_mail(c["email"])}')
     if SAFE_URL.match(u.get("url") or ""):
-        lines.append(f'📇 {_link(u["url"], t("通訊錄頁面", "Directory page"))}')
+        lines.append(f'{icon("contact-book")} {_link(u["url"], t("通訊錄頁面", "Directory page"))}')
     body = ('<div class="dir-lines">' + "".join(f"<span>{x}</span>" for x in lines) + "</div>") if lines else \
         f'<div class="muted">{t("通訊錄沒有這個單位的聯絡方式", "No contact info listed")}</div>'
 
@@ -121,6 +121,7 @@ def search_units(units: list[dict], query: str, limit: int = 20) -> list[dict]:
 
 CSS = """<style>
 .dir-lines{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.88rem}
+.dir-lines .ico{margin-right:4px;color:var(--acc-text)}
 .dir-lines a,.dir-table a{color:var(--acc-text)!important}
 .dir-people{margin-top:8px;font-size:.85rem}
 .dir-people summary{cursor:pointer;font-weight:600;color:var(--acc-text)}
