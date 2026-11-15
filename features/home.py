@@ -148,7 +148,7 @@ def stats_strip(now: datetime) -> str:
         word = t("上課中", "Now") if to_min(s["start"]) <= cur else t("下一堂", "Next")
         cls = stat(cal_ico, "#6C63FF", today_lb, n_cls, f'{word}{t("：", ": ")}{esc(c["name"])} {s["start"]}')
     else:
-        cls = stat(cal_ico, "#6C63FF", today_lb, n_cls, t("今天的課都上完了 🎉", "All done for today 🎉"))
+        cls = stat(cal_ico, "#6C63FF", today_lb, n_cls, t("今天的課都上完了", "All done for today") + " " + (icon("party") or "🎉"))
 
     nb = next_bus(now)
     if nb:
@@ -167,7 +167,7 @@ def stats_strip(now: datetime) -> str:
                     f'{kind_name(exams[0])}{t("：", ": ")}{esc(exams[0]["subject"])}')
     else:
         exam = stat(icon("alarm") or "📅", "#E5486F", t("考試 / 作業", "Exams & homework"), "—",
-                    t("目前沒有考試或作業 🎉", "Nothing due 🎉"))
+                    t("目前沒有考試或作業", "Nothing due") + " " + (icon("party") or "🎉"))
 
     opened, total = open_food(now)
     food = stat(icon("food") or "🍱", "#E08A1E", t("營業中餐廳", "Open now"), f"{len(opened)}<small>{t('家', ' places')}</small>",
@@ -204,7 +204,7 @@ def exam_summary(now: datetime) -> str:
     head = _head((icon("alarm") or "📅 ") + t("下一個考試 / 作業", "Next exam / homework"),
                  kind_badge(exams[0]) if exams else "")
     if not exams:
-        return card(head + _grow(empty("🎉", t("目前沒有考試或作業", "Nothing due"))))
+        return card(head + _grow(empty(icon("party") or "🎉", t("目前沒有考試或作業", "Nothing due"))))
     e = exams[0]
     dt = exam_datetime(e)
     urgent = (dt - now).days < WARN_DAYS
@@ -232,7 +232,7 @@ def bus_summary(now: datetime) -> str:
                             f'<span class="e">{eta_text(nxt[0][1])}</span></div>')
     if not rows:
         msg = t("今天沒有班次", "No buses today") if now.weekday() >= 5 else t("今天已無班次", "No more buses today")
-        return card(head + _grow(empty("🌃", msg)) +
+        return card(head + _grow(empty(icon("night-sleeping") or "🌃", msg)) +
                     f'<div class="foot muted">{t("可到「公車班表」切換關注路線", "Change favorite routes on the Bus page")}</div>')
     return card(head + _grow("".join(rows)))
 
@@ -242,7 +242,7 @@ def food_summary(now: datetime) -> str:
     head = _head((icon("food") or "🍱 ") + t("現在營業的餐廳", "Open restaurants"),
                  badge(t(f"{len(opened)} 家", f"{len(opened)} open"), "#E08A1E") if opened else "")
     if not opened:
-        return card(head + _grow(empty("🌙", t("目前沒有營業中的餐廳", "Nothing is open right now"))))
+        return card(head + _grow(empty(icon("night") or "🌙", t("目前沒有營業中的餐廳", "Nothing is open right now"))))
     rows = []
     for r, s in opened[:FOOD_ROWS]:
         if s.get("allday"):

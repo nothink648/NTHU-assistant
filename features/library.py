@@ -60,7 +60,7 @@ def spaces_tab() -> None:
         st.warning(err)
     rows = [r for r in data or [] if isinstance(r, dict)]
     if not rows:
-        html(card(empty("📭", t("目前查不到空間資料", "No space data available"))))
+        html(card(empty(icon("mail-box") or "📭", t("目前查不到空間資料", "No space data available"))))
         return
 
     groups: dict[str, list[dict]] = {}
@@ -92,7 +92,7 @@ def hours_tab() -> None:
         color = CAL_COLOR.get(cal_id, "#6C63FF")
         if err and not events:
             cards.append(card(f'<div class="card-head"><span class="card-title">{icon("book")}{name}</span></div>'
-                              + empty("⚠️", t("暫時查不到", "Unavailable right now"))))
+                              + empty(icon("warning") or "⚠️", t("暫時查不到", "Unavailable right now"))))
             continue
 
         def on(d: date) -> list[str]:
@@ -133,7 +133,7 @@ def news_tab() -> None:
         st.warning(err)
     items = [x for x in data or [] if isinstance(x, dict) and x.get("title")]
     if not items:
-        html(card(empty("📭", t("目前沒有消息", "No news"))))
+        html(card(empty(icon("mail-box") or "📭", t("目前沒有消息", "No news"))))
         return
     for x in items:
         day = _pub_date(x.get("pubDate"))
@@ -150,7 +150,7 @@ def news_tab() -> None:
             links = _links(x.get("link"))
             if links:
                 html('<div class="links">' + "".join(
-                    f'<a class="link-chip" href="{esc(u)}" target="_blank" rel="noopener">🔗 {t("連結", "Link")} {i}</a>'
+                    f'<a class="link-chip" href="{esc(u)}" target="_blank" rel="noopener">{icon("link") or "🔗"} {t("連結", "Link")} {i}</a>'
                     for i, u in enumerate(links, 1)) + "</div>")
 
 
@@ -162,7 +162,7 @@ def lost_tab() -> None:
         st.warning(err)
     rows = [r for r in data or [] if isinstance(r, dict)]
     if not rows:
-        html(card(empty("📭", t("目前沒有失物資料", "No lost items"))))
+        html(card(empty(icon("mail-box") or "📭", t("目前沒有失物資料", "No lost items"))))
         return
     df = pd.DataFrame(rows).reindex(columns=["拾獲時間", "拾獲地點", "描述"]).fillna("")
     c1, c2 = st.columns([2, 1])

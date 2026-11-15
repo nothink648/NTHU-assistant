@@ -114,7 +114,7 @@ def render() -> None:
     if err:
         st.warning(err)
     if not items:
-        html(card(empty("📭", t("目前沒有公告", "No announcements"))))
+        html(card(empty(icon("mail-box") or "📭", t("目前沒有公告", "No announcements"))))
         return
 
     c1, c2, c3 = st.columns([1.2, 2, 2.4])
@@ -141,7 +141,7 @@ def render() -> None:
     head = (f'<div class="card-head"><span class="card-title">{icon("megaphone")}{esc(dept if dept != ALL else t("最新公告", "Latest announcements"))}</span>'
             f'{badge(t(f"{len(shown)} 則", f"{len(shown)} items"), "#6C63FF")}</div>')
     contacts: dict[str, str] = {}
-    body = "".join(_row(a, finder, contacts) for a in shown[:limit]) if shown else empty("🔍", t("找不到符合的公告", "No matching announcements"))
+    body = "".join(_row(a, finder, contacts) for a in shown[:limit]) if shown else empty(icon("search") or "🔍", t("找不到符合的公告", "No matching announcements"))
     html(card(head + body, "ann"))
 
     if len(shown) > limit:

@@ -47,7 +47,7 @@ def render_login() -> None:
              f'<span>{icon("star")} {t("關注的公車路線", "Favorite bus routes")}</span></div></div>')
         if "auth_flash" in st.session_state:
             st.success(st.session_state.pop("auth_flash"))
-        tab_in, tab_up = st.tabs([t("登入", "Sign in"), t("✨ 註冊新帳號", "✨ Create account")])
+        tab_in, tab_up = st.tabs([t("登入", "Sign in"), t("註冊新帳號", "Create account")])
         with tab_in:
             with st.form("login"):
                 name = st.text_input(t("帳號", "Username"), key="li_name")
@@ -92,14 +92,14 @@ def render_account(uid: str) -> None:
         with box:
             _account_settings(uid, name)
         if "acct_flash" in st.session_state:
-            st.toast(st.session_state.pop("acct_flash"), icon="✅")
+            st.toast(st.session_state.pop("acct_flash"), icon=":material/check_box:")
         out = t("登出", "Sign out")
         if st.button(out if has("logout") else "🚪 " + out, use_container_width=True, key="logout_btn"):
             auth.logout()
             st.session_state.auth_flash = t("已登出", "Signed out")
             st.rerun()
     if "auth_welcome" in st.session_state:
-        st.toast(st.session_state.pop("auth_welcome"), icon="🎉")
+        st.toast(st.session_state.pop("auth_welcome"), icon=":material/celebration:")
 
 
 def _account_settings(uid: str, name: str) -> None:

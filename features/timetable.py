@@ -18,7 +18,7 @@ from config import PERIODS
 from core import nthu_api
 from core.i18n import is_en, t, weekday
 from core.storage import load_user_json, save_user_json
-from core.icons import before_css, icon, label, tab_css
+from core.icons import before_css, has, icon, label, tab_css
 from core.ui import esc, hero, html
 from features.base import Feature
 
@@ -176,7 +176,7 @@ def _add_slots() -> None:
             if s["day"] == d and overlaps(start, end, s["start"], s["end"]):
                 other = find_course(data, s["course_id"])
                 if other and other["id"] != course["id"]:
-                    notes.append(t(f"⚠️ {weekday(d)} 與「{other['name']}」時間重疊", f"⚠️ {weekday(d)}: overlaps with “{other['name']}”"))
+                    notes.append(t(f"{weekday(d)} 與「{other['name']}」時間重疊", f"{weekday(d)}: overlaps with “{other['name']}”"))
         data["slots"].append({"id": uuid.uuid4().hex, "course_id": course["id"], "day": d,
                               "periods": periods, "start": start, "end": end,
                               "room": ss.tt_room.strip()})
@@ -318,8 +318,8 @@ def _add_catalog_course(c: dict) -> None:
             other = find_course(data, x["course_id"])
             if x["day"] == s["day"] and overlaps(s["start"], s["end"], x["start"], x["end"]) and other \
                     and other["id"] != course["id"]:
-                notes.append(t(f"⚠️ {weekday(s['day'])} 與「{other['name']}」時間重疊",
-                               f"⚠️ {weekday(s['day'])}: overlaps with “{other['name']}”"))
+                notes.append(t(f"{weekday(s['day'])} 與「{other['name']}」時間重疊",
+                               f"{weekday(s['day'])}: overlaps with “{other['name']}”"))
         data["slots"].append({"id": uuid.uuid4().hex, "course_id": course["id"], **s})
         added.append(f"{weekday(s['day'])} {s['start']}–{s['end']}")
     save_data(data)
@@ -377,7 +377,7 @@ def _show_msgs(key: str) -> None:
     msgs, ss[key] = ss.get(key, []), []
     for kind, text in msgs:
         if kind == "success":
-            st.toast(text, icon="✅")
+            st.toast(text, icon=":material/check_box:")
         getattr(st, kind)(text)
 
 
@@ -464,7 +464,7 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
         if exams.get(b["course_id"]):  # 連結到這門課的下一個考試 / 作業
             e = exams[b["course_id"]][0]
             kind = t("作業", "Homework") if e.get("kind") == "homework" else t("考試", "Exam")
-            lines.append(f'<span style="color:#E5486F;font-weight:600">📝 {kind} {e["datetime"][5:10].replace("-", "/")}</span>')
+            lines.append(f'<span style="color:#E5486F;font-weight:600">{icon("edit") or "📝"} {kind} {e["datetime"][5:10].replace("-", "/")}</span>')
         w = 100 / b["lanes"]
         cells.append(
             f'<div class="tt-c" style="grid-row:{b["i0"] + 2} / span {b["i1"] - b["i0"] + 1};'
@@ -501,7 +501,7 @@ def _tab_add(data: dict) -> None:
     st.markdown(f"<div class='muted' style='margin:6px 2px'>{t('或手動填寫（課程資料庫沒有的課、自訂時段）', 'Or fill in manually (courses not in the catalog, custom times)')}</div>",
                 unsafe_allow_html=True)
     with st.container(border=True):
-        st.markdown(f"**📘 {t('課程資料', 'Course info')}**")
+        st.markdown(f"**{icon('book') or '📘'} {t('課程資料', 'Course info')}**", unsafe_allow_html=True)
         st.selectbox(t("選擇已填過的課程（會自動帶入資料）", "Pick an existing course (fills in its details)"), options,
                      key="tt_course", format_func=lambda i: t("➕ 新課程", "➕ New course") if i == NEW else names[i],
                      on_change=_on_course_change)
@@ -525,7 +525,8 @@ def _tab_add(data: dict) -> None:
                          on_change=_on_start_change)
             s2.selectbox(t("結束節次", "End period"), PERIOD_LABELS, key="tt_p_end", format_func=fmt)
             if PERIOD_LABELS.index(ss.tt_p_end) >= PERIOD_LABELS.index(ss.tt_p_start):
-                st.caption(f"⏰ {PERIOD_TIME[ss.tt_p_start][0]}–{PERIOD_TIME[ss.tt_p_end][1]}")
+                st.caption(f"{icon('alarm') or '⏰'} {PERIOD_TIME[ss.tt_p_start][0]}–{PERIOD_TIME[ss.tt_p_end][1]}",
+                           unsafe_allow_html=True)
         else:
             t1, t2 = st.columns(2)
             t1.time_input(t("開始時間", "Start time"), key="tt_c_start", step=300)
@@ -547,14 +548,14 @@ def _tab_manage(data: dict) -> None:
         cid = c["id"]
         mine = sorted((s for s in data["slots"] if s["course_id"] == cid),
                       key=lambda s: (s["day"], to_min(s["start"])))
-        n_exam = (t(f"　·　📝 {len(exams[cid])} 項考試 / 作業", f"　·　📝 {len(exams[cid])} exams / homework")
+        n_exam = (t(f"　·　{len(exams[cid])} 項考試 / 作業", f"　·　{len(exams[cid])} exams / homework")
                   if exams.get(cid) else "")
         cr = float(c.get("credits", 0))
         with st.expander(f"{c['name']}　·　" + t(f"{cr:g} 學分　·　{len(mine)} 個時段", f"{cr:g} credits　·　{len(mine)} slots")
                          + n_exam):
             for e in exams.get(cid, []):
                 place = f"　{icon('pin')}{esc(e['place'])}" if e.get("place") else ""
-                st.markdown(f"📝 **{esc(e['subject'])}**　{e['datetime'][:16].replace('T', ' ')}{place}",
+                st.markdown(f"{icon('edit') or '📝'} **{esc(e['subject'])}**　{e['datetime'][:16].replace('T', ' ')}{place}",
                             unsafe_allow_html=True)
             with st.form(f"edit_{cid}"):
                 f1, f2 = st.columns([3, 1])
@@ -562,7 +563,7 @@ def _tab_manage(data: dict) -> None:
                 credits = f2.number_input(t("學分", "Credits"), 0.0, 12.0, float(c.get("credits", 0)), 1.0, format="%g")
                 teacher = st.text_input(t("授課教授", "Teacher"), c.get("teacher", ""))
                 note = st.text_input(t("備註", "Note"), c.get("note", ""))
-                if st.form_submit_button(t("💾 儲存課程資料", "💾 Save course")) and name.strip():
+                if st.form_submit_button(label("save", t("儲存課程資料", "Save course")), key=f"save_course_{cid}") and name.strip():
                     c.update(name=name.strip(), credits=float(credits),
                              teacher=teacher.strip(), note=note.strip())
                     save_data(data)
@@ -571,11 +572,12 @@ def _tab_manage(data: dict) -> None:
                 l, r = st.columns([8, 1])
                 room = f"　{icon('pin')}{esc(s['room'])}" if s.get("room") else ""
                 l.markdown(f"{icon('clock') or '🕘'} {slot_label(s)}{room}", unsafe_allow_html=True)
-                if r.button("🗑️", key=f"del_slot_{s['id']}", help=t("刪除這個時段", "Delete this slot")):
+                # 有圖時按鈕文字只放零寬空白，垃圾桶由 CSS 畫上（core/icons.py）
+                if r.button("​" if has("trash") else "🗑️", key=f"del_slot_{s['id']}", help=t("刪除這個時段", "Delete this slot")):
                     data["slots"] = [x for x in data["slots"] if x["id"] != s["id"]]
                     save_data(data)
                     st.rerun()
-            if st.button(t("🗑️ 刪除整門課程（含所有時段）", "🗑️ Delete course (and all its slots)"), key=f"del_course_{cid}"):
+            if st.button(label("trash", t("刪除整門課程（含所有時段）", "Delete course (and all its slots)")), key=f"del_course_{cid}"):
                 data["courses"] = [x for x in data["courses"] if x["id"] != cid]
                 data["slots"] = [x for x in data["slots"] if x["course_id"] != cid]
                 save_data(data)

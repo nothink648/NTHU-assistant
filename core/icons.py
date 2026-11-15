@@ -47,6 +47,9 @@ ICONS = {  # 名稱 -> 用途
     "mail": "Email",
     "contact-book": "通訊錄",
     "sport": "體育場館",
+    "warning": "警告 / 注意事項", "check-square": "成功", "party": "完成 / 歡迎", "save": "儲存", "trash": "刪除",
+    "file": "檔案（考古題）", "link": "連結", "edit": "編輯 / 作業 / 待填", "night-sleeping": "收班 / 無班次",
+    "night": "打烊 / 夜間", "info": "說明",
 }
 FALLBACK = {  # 圖檔不存在時改用的 emoji
     "home": "🏠", "calendar": "📆", "alarm": "📅", "food": "🍱", "bus": "🚌", "map": "🗺️", "clock": "🕘",
@@ -55,6 +58,8 @@ FALLBACK = {  # 圖檔不存在時改用的 emoji
     "refresh": "🔄", "chair": "🪑", "news": "📰", "search": "🔍", "add": "➕", "manage-dates": "📚",
     "time-list": "📋", "arrow-up": "⬆️", "mail-box": "📭", "web": "🌐", "telephone": "☎️", "phone": "📞",
     "fax": "📠", "mail": "✉️", "contact-book": "📇", "sport": "🏀",
+    "warning": "⚠️", "check-square": "✅", "party": "🎉", "save": "💾", "trash": "🗑️", "file": "📄", "link": "🔗",
+    "edit": "✏️", "night-sleeping": "🛌", "night": "🌙", "info": "ℹ️",
 }
 ARROWS = {0: "⬆️", 90: "➡️", 180: "⬇️", 270: "⬅️"}  # arrow-up 旋轉角度 -> 沒有圖時的 emoji
 
@@ -152,6 +157,14 @@ def css(nav_icons: list[str]) -> str:
                                  mask=_mask("key")))
     if has("logout"):
         rules.append(side.format(sel="[data-testid='stSidebar'] .st-key-logout_btn button p", mask=_mask("logout")))
+    # 只能放純文字的按鈕 / 標籤：用 ::before 畫上 icon（文字由 label() 處理，沒有圖時才放 emoji）
+    for sel, name in (("[class*='st-key-del_'] button p", "trash"),   # 刪除時段 / 課程 / 考試
+                      ("[class*='st-key-save_'] button p", "save"),   # 儲存課程 / 考試修改
+                      (".st-key-food_refresh button p", "refresh"),   # 餐廳「立即更新」
+                      (".st-key-food_info summary p", "info"),        # 餐廳「資料來源與更新」
+                      (".st-key-bus_stop label p", "pin")):           # 公車「我在哪一站」
+        rules.append(before_css(sel, name))
+    rules.append("[class*='st-key-del_slot_'] button p::before{margin-right:0}")  # 只有圖示的刪除鈕
     if has("web"):  # 登入頁右上角的語言選單：前面畫地球
         for sel in (".st-key-login_lang_box .react-aria-ComboBox > [role='group']",  # Streamlit 1.5x+
                     ".st-key-login_lang_box [data-baseweb='select'] > div:first-child"):  # 舊版

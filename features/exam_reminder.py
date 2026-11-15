@@ -15,7 +15,7 @@ import streamlit as st
 from core.i18n import fmt_day, t
 from core.storage import load_user_json, save_user_json
 from core.icons import before_css, icon, label
-from core.ui import badge, esc, hero, html
+from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 from features.timetable import course_colors, load_data as load_timetable
 
@@ -43,13 +43,13 @@ def kind_badge(exam: dict) -> str:
 
 
 def when_html(exam: dict, dt: datetime | None = None) -> str:
-    """考試：🗓️ 日期時間 + 地點；作業：截止 日期時間。"""
+    """考試：日期時間 + 地點；作業：截止 日期時間。"""
     dt = dt or exam_datetime(exam)
     when = f"{fmt_day(dt, year=True)} {dt:%H:%M}"
     if kind_of(exam) == "homework":
-        return f"⏰ {t('截止', 'Due')} {when}"
+        return f"{icon('alarm') or '⏰'} {t('截止', 'Due')} {when}"
     place = f"　{icon('pin')}{esc(exam['place'])}" if exam.get("place") else ""
-    return f"🗓️ {when}{place}"
+    return f"{icon('event') or '🗓️'} {when}{place}"
 
 
 # ---------- 資料邏輯（可被其他頁面重複使用） ----------
@@ -99,7 +99,7 @@ def course_html(exam: dict, timetable: dict | None = None) -> str:
     if not course:
         return ""
     teacher = f'<span class="muted">　{icon("person")} {esc(course["teacher"])}</span>' if course.get("teacher") else ""
-    return (f'<div style="margin:2px 0 4px">{badge("📚 " + course["name"], course_colors(timetable)[course["id"]])}'
+    return (f'<div style="margin:2px 0 4px">{badge(course["name"], course_colors(timetable)[course["id"]], ico="book")}'
             f'{teacher}</div>')
 
 
@@ -137,7 +137,7 @@ def links_html(exam: dict) -> str:
         return ""
     chips = "".join(
         f'<a class="link-chip" href="{esc(u)}" target="_blank" rel="noopener noreferrer" title="{esc(u)}">'
-        f'📄 {t("考古題", "Past exam")}{"" if len(links) == 1 else f" {i}"}</a>'
+        f'{icon("file") or "📄"} {t("考古題", "Past exam")}{"" if len(links) == 1 else f" {i}"}</a>'
         for i, u in enumerate(links, 1))
     return f'<div class="links">{chips}</div>'
 
@@ -200,14 +200,14 @@ def render() -> None:
                                   "datetime": when.isoformat(), "place": place,
                                   "links": links, "course_id": cid if course else ""})
                     save_exams(exams)
-                    st.toast(t(f"已新增{name}：{subject}", f"Added {name.lower()}: {subject}"), icon="✅")
+                    st.toast(t(f"已新增{name}：{subject}", f"Added {name.lower()}: {subject}"), icon=":material/check_box:")
 
     now = datetime.now()
     upcoming = get_upcoming_exams(now)
 
     if not upcoming:
-        st.info(t("目前沒有即將到來的考試或作業 🎉　點上方「新增考試或作業」加入吧！",
-                  "Nothing coming up 🎉　Use “Add exam or homework” above to add one."))
+        html(card(empty(icon("party") or "🎉", t("目前沒有即將到來的考試或作業，點上方「新增考試或作業」加入吧！",
+                                                 "Nothing coming up. Use “Add exam or homework” above to add one."))))
         return
 
     n_hw = sum(kind_of(e) == "homework" for e in upcoming)
@@ -248,14 +248,14 @@ def _menu(exam: dict, course_opts: list[str], course_fmt) -> None:
     """卡片右上角的 ⋮：連結科目 / 修改 / 刪除。"""
     eid = exam["id"]
     with st.popover(MENU_LABEL):
-        html(f'<div class="pm-h">🔗 {t("連結課表科目", "Link a course")}</div>')  # 新版 Streamlit：popover 內放粗體 markdown 會打不開，改用 HTML
+        html(f'<div class="pm-h">{icon("link") or "🔗"} {t("連結課表科目", "Link a course")}</div>')  # 新版 Streamlit：popover 內放粗體 markdown 會打不開，改用 HTML
         cur = exam.get("course_id") if exam.get("course_id") in course_opts else ""
         st.selectbox(t("課表科目", "Course"), course_opts, index=course_opts.index(cur), format_func=course_fmt,
                      key=f"link_{eid}", on_change=_relink, args=(exam,), label_visibility="collapsed")
 
         name = kind_name(exam)
         homework = kind_of(exam) == "homework"
-        html(f'<div class="pm-h">✏️ {t(f"修改{name}", f"Edit {name.lower()}")}</div>')
+        html(f'<div class="pm-h">{icon("edit") or "✏️"} {t(f"修改{name}", f"Edit {name.lower()}")}</div>')
         dt = exam_datetime(exam)
         with st.form(f"edit_{eid}", border=False):
             st.text_input(t(f"{name}名稱", f"{name} name"), exam["subject"], key=f"ed_subject_{eid}")
@@ -267,10 +267,10 @@ def _menu(exam: dict, course_opts: list[str], course_fmt) -> None:
                 st.text_input(t("地點", "Location"), exam.get("place", ""), key=f"ed_place_{eid}")
                 st.text_area(t("歷屆考古題連結（一行一個）", "Past exam links (one per line)"),
                              "\n".join(exam.get("links") or []), height=80, key=f"ed_links_{eid}")
-            st.form_submit_button(t("💾 儲存修改", "💾 Save changes"), type="primary", on_click=_save_edit, args=(exam,),
-                                  use_container_width=True)
+            st.form_submit_button(label("save", t("儲存修改", "Save changes")), type="primary", on_click=_save_edit,
+                                  args=(exam,), use_container_width=True, key=f"save_exam_{eid}")
 
-        st.button(t(f"🗑️ 刪除這項{name}", f"🗑️ Delete this {name.lower()}"), key=f"del_{eid}", on_click=_delete,
+        st.button(label("trash", t(f"刪除這項{name}", f"Delete this {name.lower()}")), key=f"del_{eid}", on_click=_delete,
                   args=(exam,), use_container_width=True)
 
 
@@ -279,11 +279,11 @@ def _save_edit(exam: dict) -> None:
     subject = ss.get(f"ed_subject_{eid}", "").strip()
     links, bad = parse_links(ss.get(f"ed_links_{eid}", ""))
     if not subject:
-        st.toast(t(f"{kind_name(exam)}名稱不能空白，未儲存", "Name can't be empty; not saved"), icon="⚠️")
+        st.toast(t(f"{kind_name(exam)}名稱不能空白，未儲存", "Name can't be empty; not saved"), icon=":material/warning:")
         return
     if bad:
         st.toast(t("連結格式不正確（需以 http:// 或 https:// 開頭）：", "Invalid links (must start with http:// or https://): ")
-                 + "、".join(bad), icon="⚠️")
+                 + "、".join(bad), icon=":material/warning:")
         return
     when = datetime.combine(ss[f"ed_date_{eid}"], ss[f"ed_time_{eid}"])
     exams = load_exams()
@@ -295,7 +295,7 @@ def _save_edit(exam: dict) -> None:
     save_exams(exams)
     st.toast(t(f"已更新：{subject}", f"Updated: {subject}")
              + (t("（時間已過，不會再顯示在清單）", " (time has passed, it won't be listed)") if when < datetime.now() else ""),
-             icon="✏️")
+             icon=":material/edit:")
 
 
 def _relink(exam: dict) -> None:
@@ -305,12 +305,12 @@ def _relink(exam: dict) -> None:
         if e.get("id") == exam["id"]:
             e["course_id"] = cid
     save_exams(exams)
-    st.toast(t("已更新連結的課表科目", "Linked course updated"), icon="🔗")
+    st.toast(t("已更新連結的課表科目", "Linked course updated"), icon=":material/link:")
 
 
 def _delete(exam: dict) -> None:
     save_exams([e for e in load_exams() if e.get("id") != exam["id"]])
-    st.toast(t(f"已刪除：{exam['subject']}", f"Deleted: {exam['subject']}"), icon="🗑️")
+    st.toast(t(f"已刪除：{exam['subject']}", f"Deleted: {exam['subject']}"), icon=":material/delete:")
 
 
 FEATURE = Feature(title="考試 / 作業提醒", icon="📅", render=render, slug="exams", ico="alarm",

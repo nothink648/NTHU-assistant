@@ -19,7 +19,7 @@ import streamlit as st
 from core.i18n import t
 from core import nthu_api
 from core.storage import load_json
-from core.icons import has, icon
+from core.icons import has, icon, label
 from core.ui import badge, esc, hero, html
 from features.base import Feature
 
@@ -276,8 +276,8 @@ def week_lines(r: dict) -> str:
 def restaurant_card(r: dict, st_: dict, extra_cls: str = "") -> str:
     img = f'<img class="fimg" src="{esc(r["image"])}" alt="" loading="lazy">' if r.get("image") else '<div class="fimg"></div>'
     area = esc(r.get("area") or r.get("building", ""))
-    note = f'<div class="fnote">⚠️ {esc(r["note"])}</div>' if r.get("note") else ""
-    phone = f'<div class="fphone">☎ {esc(r["phone"])}</div>' if r.get("phone") else ""
+    note = f'<div class="fnote">{icon("warning") or "⚠️"} {esc(r["note"])}</div>' if r.get("note") else ""
+    phone = f'<div class="fphone">{icon("telephone") or "☎"} {esc(r["phone"])}</div>' if r.get("phone") else ""
     off = "" if st_["is_open"] else "is-off"
     return (f'<div class="card {off} {extra_cls}"><div class="fhead">{img}<div>'
             f'<div class="fname">{esc(r["name"])}</div><div class="farea">{icon("pin")} {area}</div></div></div>'
@@ -352,7 +352,7 @@ def render() -> None:
     html(_CSS)
     hero(t("校園餐廳", "Restaurants"), t("營業時間一覽　·　選擇困難就交給轉盤", "Opening hours　·　Can't decide? Spin the wheel"), "food")
     if "food_flash" in st.session_state:
-        st.toast(st.session_state.pop("food_flash"), icon="✅")
+        st.toast(st.session_state.pop("food_flash"), icon=":material/check_box:")
     data = load_data()
     rests = all_restaurants(data)
     if data.get("error"):
@@ -399,12 +399,12 @@ def render() -> None:
                     continue
                 html('<div class="food-grid">' + "".join(restaurant_card(r, stats[r["id"]]) for r in items) + "</div>")
 
-    with st.expander(t("ℹ️ 資料來源與更新", "ℹ️ Data source & updates")):
+    with st.container(key="food_info"), st.expander(label("info", t("資料來源與更新", "Data source & updates"))):
         st.markdown(t(f"資料來自 [NTHU Data API](https://api.nthusa.tw/docs)（整理自 [清華總務處經營管理組 — 餐廳及服務性廠商]({SOURCE_URL})），每小時自動更新。",
                       f"Data from the [NTHU Data API](https://api.nthusa.tw/docs) (based on [NTHU General Affairs — Restaurants & services]({SOURCE_URL})), refreshed hourly."))
         st.caption(t("營業狀態是從營業時間文字推算的；國定假日、寒暑假與臨時公休請以店家公告為準。",
                      "Open/closed status is inferred from the listed hours; check with each shop for holidays and closures."))
-        if st.button(t("🔄 立即更新", "🔄 Refresh now"), key="food_refresh"):
+        if st.button(label("refresh", t("立即更新", "Refresh now")), key="food_refresh"):
             new = load_data(refresh=True)
             st.session_state.pop("food_spin", None)
             if not new.get("offline"):

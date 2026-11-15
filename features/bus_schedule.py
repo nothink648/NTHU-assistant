@@ -329,16 +329,16 @@ def route_card(route: dict, now: datetime, default_origin: str) -> str:
                      f'<span class="muted">{origin}</span></div>')
         if not parse_entries(d.get(day, [])):
             if day == "weekend":
-                parts.append(empty("🛌", t("假日無班次", "No weekend service")))
+                parts.append(empty(icon("night-sleeping") or "🛌", t("假日無班次", "No weekend service")))
             elif not parse_entries(d.get("weekend", [])):
-                parts.append(empty("📝", t("尚未填寫班表", "No timetable yet")))
+                parts.append(empty(icon("edit") or "📝", t("尚未填寫班表", "No timetable yet")))
             else:
-                parts.append(empty("🛌", t("平日無班次", "No weekday service")))
+                parts.append(empty(icon("night-sleeping") or "🛌", t("平日無班次", "No weekday service")))
         else:
             nxt = get_next_buses(d, now)
             parts.append("".join(f'<div class="row"><span class="t">{hhmm}{mark_html(mk)}</span>'
                                  f'<span class="e">{eta_text(m)}</span></div>' for hhmm, m, mk in nxt)
-                         or empty("🌃", t("今天已無班次", "No more buses today")))
+                         or empty(icon("night-sleeping") or "🌃", t("今天已無班次", "No more buses today")))
     return (f'<div class="card route" style="border-top:4px solid {c}">'
             f'{head}{note}{"".join(parts)}</div>')
 
@@ -358,7 +358,7 @@ def arrivals_tab(now: datetime) -> None:
     saved = get_stop()
     if st.session_state.get("bus_stop") not in stops:  # 第一次進來：帶入上次選的站
         st.session_state["bus_stop"] = saved if saved in stops else stops[0]
-    st.selectbox(t("📍 我在哪一站", "📍 Where are you?"), stops, key="bus_stop", on_change=_save_stop, format_func=tr_place)
+    st.selectbox(icon_label("pin", t("我在哪一站", "Where are you?")), stops, key="bus_stop", on_change=_save_stop, format_func=tr_place)
     stop = st.session_state["bus_stop"]
 
     items, err = stop_arrivals(stop, now)
@@ -369,7 +369,7 @@ def arrivals_tab(now: datetime) -> None:
     if not items:
         msg = (t("今天已沒有公車會經過這一站", "No more buses at this stop today") if not err
                else t("暫時查不到到站資料", "Arrival data unavailable right now"))
-        html(ARRIVAL_CSS + card(head + empty("🌃", msg), "arr"))
+        html(ARRIVAL_CSS + card(head + empty(icon("night-sleeping") or "🌃", msg), "arr"))
     else:
         rows = []
         for b in items:
@@ -504,14 +504,14 @@ def dir_arrow(direction: dict) -> str:
 def _save_focus() -> None:
     focus = st.session_state.get("bus_focus", DEFAULT_FOCUS)
     set_focus(focus)
-    st.toast(t(f"首頁將顯示：{focus_short(focus)}的公車", f"Home page will show: {focus_short(focus)} buses"), icon="⭐")
+    st.toast(t(f"首頁將顯示：{focus_short(focus)}的公車", f"Home page will show: {focus_short(focus)} buses"), icon=":material/star:")
 
 
 def _save_stop() -> None:
     stop = st.session_state.get("bus_stop")
     if stop:
         set_stop(stop)
-        st.toast(t(f"已記住你的站點：{stop}", f"Saved your stop: {tr_place(stop)}"), icon="📍")
+        st.toast(t(f"已記住你的站點：{stop}", f"Saved your stop: {tr_place(stop)}"), icon=":material/location_on:")
 
 
 FEATURE = Feature(title="公車班表", icon="🚌", render=render, slug="bus", ico="bus", title_en="Campus Bus")

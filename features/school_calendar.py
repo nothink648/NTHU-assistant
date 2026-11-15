@@ -190,7 +190,7 @@ def render() -> None:
         html(card(f'<div class="card-head"><span class="card-title">{icon("event") or "⏭️ "}{t("接下來", "Up next")}</span>'
                   f'{badge(countdown(nxt, today), color, live=True)}</div>'
                   f'<div class="big">{esc(main)}</div>{en}'
-                  f'<div class="muted" style="margin-top:6px">🗓️ {esc(range_label(nxt))}</div>', "cal-next"))
+                  f'<div class="muted" style="margin-top:6px">{icon("event") or "🗓️"} {esc(range_label(nxt))}</div>', "cal-next"))
 
     c1, c2 = st.columns([3, 1])
     keyword = c1.text_input(t("搜尋", "Search"), placeholder=t("搜尋事件，例如：選課、期中、放假", "Search events, e.g. course selection, midterm"),
@@ -200,7 +200,7 @@ def render() -> None:
     shown = [e for e in events if (show_past or e["last"] >= today)
              and (not keyword.strip() or keyword.strip().lower() in (e["title"] + (e["description"] or "")).lower())]
     if not shown:
-        html(card(empty("🔍" if keyword else "📭", t("找不到符合的事件", "No matching events") if keyword else t("目前沒有事件", "No events"))))
+        html(card(empty((icon("search") or "🔍") if keyword else (icon("mail-box") or "📭"), t("找不到符合的事件", "No matching events") if keyword else t("目前沒有事件", "No events"))))
         return
 
     key = f"cal_limit_{cal_id}"
