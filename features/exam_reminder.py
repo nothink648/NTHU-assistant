@@ -1,6 +1,6 @@
 """📅 考試 / 作業提醒：新增 / 刪除考試或作業，並顯示倒數時間。
 
-每一項有 kind：exam（考試，可填地點與考古題連結）或 homework（作業，只需要截止時間）；
+每一項有 kind：exam（考試，可填地點與考古題連結）或 homework（作業，截止時間 + 選填的作業連結）；
 舊資料沒有 kind 時視為考試。
 都可以連結課表裡的科目（exam["course_id"]），卡片會顯示該課程的顏色與教授，課表上也會標出來。
 """
@@ -129,15 +129,16 @@ def parse_links(text: str) -> tuple[list[str], list[str]]:
 
 
 def links_html(exam: dict) -> str:
-    """考古題連結做成可點的小膠囊，另開新分頁（作業沒有考古題）。"""
-    if kind_of(exam) == "homework":
-        return ""
+    """考古題 / 作業連結做成可點的小膠囊，另開新分頁；作業沒填連結時顯示淡色「無連結」。"""
+    homework = kind_of(exam) == "homework"
     links = [u for u in exam.get("links") or [] if isinstance(u, str) and u.lower().startswith(("http://", "https://"))]
     if not links:
-        return ""
+        return (f'<div class="links"><span class="muted">{icon("link") or "🔗"} {t("無連結", "No link")}</span></div>'
+                if homework else "")
+    ico, text = ("link", t("作業連結", "Homework link")) if homework else ("file", t("考古題", "Past exam"))
     chips = "".join(
         f'<a class="link-chip" href="{esc(u)}" target="_blank" rel="noopener noreferrer" title="{esc(u)}">'
-        f'{icon("file") or "📄"} {t("考古題", "Past exam")}{"" if len(links) == 1 else f" {i}"}</a>'
+        f'{icon(ico) or ("🔗" if homework else "📄")} {text}{"" if len(links) == 1 else f" {i}"}</a>'
         for i, u in enumerate(links, 1))
     return f'<div class="links">{chips}</div>'
 
@@ -177,7 +178,11 @@ def render() -> None:
             else:
                 d = c1.date_input(t("截止日期", "Due date"))
                 tm = c2.time_input(t("截止時間", "Due time"), HOMEWORK_DUE, step=300)
-                place, links_raw = "", ""
+                place = ""
+                links_raw = st.text_input(t("作業連結（選填）", "Homework link (optional)"),
+                                          placeholder="https://eeclass.nthu.edu.tw/...",
+                                          help=t("填入作業頁面網址，清單上會出現可直接點擊開啟的按鈕",
+                                                 "Paste the homework page URL to get a clickable button in the list"))
             if st.form_submit_button(t("新增", "Add"), type="primary"):
                 when = datetime.combine(d, tm)
                 links, bad = parse_links(links_raw)
@@ -267,6 +272,10 @@ def _menu(exam: dict, course_opts: list[str], course_fmt) -> None:
                 st.text_input(t("地點", "Location"), exam.get("place", ""), key=f"ed_place_{eid}")
                 st.text_area(t("歷屆考古題連結（一行一個）", "Past exam links (one per line)"),
                              "\n".join(exam.get("links") or []), height=80, key=f"ed_links_{eid}")
+            else:
+                st.text_input(t("作業連結（留空表示無連結）", "Homework link (leave empty for none)"),
+                              " ".join(exam.get("links") or []), placeholder="https://eeclass.nthu.edu.tw/...",
+                              key=f"ed_links_{eid}")
             st.form_submit_button(label("save", t("儲存修改", "Save changes")), type="primary", on_click=_save_edit,
                                   args=(exam,), use_container_width=True, key=f"save_exam_{eid}")
 
@@ -290,8 +299,9 @@ def _save_edit(exam: dict) -> None:
     for e in exams:
         if e.get("id") == eid:
             e.update(subject=subject, datetime=when.isoformat())
-            if kind_of(e) == "exam":  # 作業沒有地點和考古題
-                e.update(place=ss.get(f"ed_place_{eid}", "").strip(), links=links)
+            e["links"] = links  # 考試：考古題；作業：作業連結
+            if kind_of(e) == "exam":  # 作業沒有地點
+                e["place"] = ss.get(f"ed_place_{eid}", "").strip()
     save_exams(exams)
     st.toast(t(f"已更新：{subject}", f"Updated: {subject}")
              + (t("（時間已過，不會再顯示在清單）", " (time has passed, it won't be listed)") if when < datetime.now() else ""),
