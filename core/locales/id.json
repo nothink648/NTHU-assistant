@@ -437,7 +437,12 @@
   "Nothing coming up. Click a day on the calendar or use “Add exam or homework” above.": "Belum ada yang akan datang. Klik tanggal di kalender atau gunakan “Tambah ujian atau tugas” di atas.",
   "Automatically filling in hours from Google Maps is still being improved; please enter them yourself for now.": "Fitur mengisi jam buka otomatis dari Google Maps masih disempurnakan; untuk sementara silakan isi sendiri.",
   "Pick a course I've added": "Pilih mata kuliah yang sudah ditambahkan",
-  "Enter a new course": "Masukkan mata kuliah baru"
+  "Enter a new course": "Masukkan mata kuliah baru",
+  "Open Restaurants": "Buka Restoran",
+  "Open School Calendar": "Buka Kalender Akademik",
+  "Open Timetable": "Buka Jadwal Kuliah",
+  "Open Campus Bus": "Buka Bus Kampus",
+  "Open upcoming exams & homework": "Buka daftar ujian & tugas mendatang"
  },
  "templates": {
   "Username changed to “{0}”. Use it next time you sign in": "Nama pengguna diganti menjadi “{0}”. Gunakan nama ini saat masuk berikutnya",
@@ -510,6 +515,7 @@
   "Upcoming list ({0} exams, {1} homework)": "Daftar mendatang ({0} ujian, {1} tugas)",
   "Items within {0} days are shown in red　·　Use ⋮ on a card to edit, link a course or delete": "Item dalam {0} hari ditandai merah　·　Gunakan ⋮ pada kartu untuk mengubah, menautkan mata kuliah, atau menghapus",
   "Add on {0}": "Tambah pada {0}",
-  "{0} this month": "{0} bulan ini"
+  "{0} this month": "{0} bulan ini",
+  "View {0}": "Lihat {0}"
  }
 }

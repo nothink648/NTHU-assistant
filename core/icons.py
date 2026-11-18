@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ICON_DIR = Path(__file__).resolve().parent.parent / "static" / "icons"
-URL = "/app/static/icons/{}.png"  # Streamlit 靜態檔網址（需 .streamlit/config.toml 開 enableStaticServing）
+URL = "app/static/icons/{}.png"  # 相對網址（開頭不加 /）：Streamlit Cloud 的 app 在 /~/+/ 底下，絕對路徑 /app/static 會找不到；需 config.toml 開 enableStaticServing
 
 ICONS = {  # 名稱 -> 用途
     "home": "首頁",

@@ -14,6 +14,7 @@ from datetime import date, datetime, time
 import streamlit as st
 
 from core.i18n import fmt_day, month_year, t, weekday
+from core.nav import scroll_to
 from core.storage import load_user_json, save_user_json
 from core.icons import before_css, has, icon, label
 from core.ui import badge, card, empty, esc, hero, html
@@ -242,8 +243,12 @@ def render() -> None:
     upcoming = get_upcoming_exams(now)
     n_hw = sum(kind_of(e) == "homework" for e in upcoming)
     n_ex = len(upcoming) - n_hw
+    if ss.pop("exam_goto_list", False):  # 從首頁卡片點進來：展開清單並捲到這裡
+        ss.exam_list = True
+        scroll_to(".st-key-exam_list")
     with st.expander(label("time-list", t(f"即將到來的清單（考試 {n_ex}、作業 {n_hw}）",
-                                          f"Upcoming list ({n_ex} exams, {n_hw} homework)")), key="exam_list"):
+                                          f"Upcoming list ({n_ex} exams, {n_hw} homework)")), key="exam_list",
+                     on_change="rerun"):  # 記住展開狀態，才能從首頁直接打開
         if not upcoming:
             html(card(empty(icon("party") or "🎉", t("目前沒有即將到來的考試或作業，點月曆上的日期或上方「新增考試或作業」加入吧！",
                                                      "Nothing coming up. Click a day on the calendar or use “Add exam or homework” above."))))

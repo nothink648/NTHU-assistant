@@ -1,7 +1,8 @@
 """🏠 首頁：整合各功能的摘要。
 
 版面：問候 → 四格速覽（課程 / 公車 / 考試 / 餐廳）→ 2×2 等高卡片。
-所有卡片放在同一個 CSS grid 裡，同一列的卡片高度一致。
+每一格都可以點：卡片上蓋一顆透明按鈕，按了用 st.switch_page 跳到對應頁面（考試卡片會展開「即將到來的清單」，
+營業中餐廳的每一列會跳到該餐廳）。
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from config import app_title
 from core.auth import username
 from core.i18n import fmt_day, is_en, t, tr, weekday
 from core.icons import icon
+from core.nav import goto
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 from features.bus_schedule import (eta_text, focus_short, focus_routes, get_directions, get_focus, get_next_buses,
@@ -32,13 +34,13 @@ HOME_CSS = """<style>
 .home .card,.stat{box-shadow:0 6px 22px rgba(30,20,90,.07)}
 
 /* 四格速覽 */
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:6px 0 16px}
+.st-key-home_stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:6px 0 2px}
 .stat{position:relative;overflow:hidden;display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;
   background:var(--card-bg);border:1px solid var(--line);animation:popIn .45s var(--ease) both;
   transition:transform .25s var(--ease),box-shadow .25s ease}
-.stat:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(108,99,255,.16)}
+[class*="st-key-hs_"]:hover .stat{transform:translateY(-3px);box-shadow:0 12px 26px rgba(108,99,255,.16)}
 .stat .bar{position:absolute;left:0;right:0;top:0;height:3px}
-.stat:nth-child(2){animation-delay:.06s}.stat:nth-child(3){animation-delay:.12s}.stat:nth-child(4){animation-delay:.18s}
+.st-key-hs_bus .stat{animation-delay:.06s}.st-key-hs_exam .stat{animation-delay:.12s}.st-key-hs_food .stat{animation-delay:.18s}
 .stat .ic{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:1.35rem}
 .stat .ic .ico{width:24px;height:24px;vertical-align:0}
 .stat .lb{font-size:.78rem;opacity:.65;font-weight:600}
@@ -47,16 +49,41 @@ HOME_CSS = """<style>
 .stat .sb{font-size:.78rem;opacity:.62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat .tx{min-width:0}
 
-/* 2×2 等高卡片 */
-.home-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
-.home-grid>.card{margin:0;height:100%;display:flex;flex-direction:column}
-.home-grid>.card .grow{flex:1}
-.home-grid>.card:nth-child(2){animation-delay:.08s}.home-grid>.card:nth-child(3){animation-delay:.16s}
-.home-grid>.card:nth-child(4){animation-delay:.24s}
-.home-grid .foot{margin-top:auto;padding-top:8px}
+/* 2×2 等高卡片：grid 讓同一列等高，卡片外層一路撐滿 */
+.st-key-home_grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
+:is(.st-key-home_grid,.st-key-home_stats)>[data-testid="stLayoutWrapper"],
+[class*="st-key-hc_"],[class*="st-key-hs_"],[class*="st-key-hc_"] div:has(.card),[class*="st-key-hs_"] div:has(.stat){height:100%}
+.st-key-home_grid .card{margin:0;height:100%;display:flex;flex-direction:column;
+  transition:transform .25s var(--ease),box-shadow .25s ease,border-color .25s ease}
+.st-key-home_grid .card .grow{flex:1}
+.st-key-hc_exam .card{animation-delay:.08s}.st-key-hc_bus .card{animation-delay:.16s}
+.st-key-home_grid .foot{margin-top:auto;padding-top:8px}
+[class*="st-key-hc_"]:hover .card{transform:translateY(-3px);box-shadow:0 12px 26px rgba(108,99,255,.16);border-color:var(--acc)}
 
-@media (max-width:900px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:640px){.home-grid{grid-template-columns:1fr}}
+/* 可點的格子：透明按鈕蓋滿整格；餐廳每一列有自己的按鈕，疊在卡片按鈕上面 */
+:is([class*="st-key-hc_"],[class*="st-key-hs_"],.st-key-hl_cal,[class*="st-key-hf_"]){position:relative}
+[class*="st-key-go_"]{position:absolute!important;inset:0;z-index:3;margin:0!important}
+[class*="st-key-go_f_"]{z-index:4}
+[class*="st-key-go_"] div,[class*="st-key-go_"] button{width:100%!important;height:100%!important;min-height:0}
+[class*="st-key-go_"] button{opacity:0;cursor:pointer;padding:0;border:0}
+[class*="st-key-go_"] button:focus-visible{opacity:1;background:transparent;box-shadow:0 0 0 2px var(--acc);border-radius:16px}
+[class*="st-key-go_"] button:focus-visible p{display:none}
+[class*="st-key-hf_"]:hover .row{background:var(--acc-soft)}
+.st-key-home_grid .links{position:relative;z-index:5}  /* 考古題 / 作業連結要在透明按鈕上面才點得到 */
+.st-key-hl_cal:hover .mq{box-shadow:0 0 0 1px var(--acc)}
+
+/* 營業中餐廳：卡片拆成標題 + 每列一個容器，外框畫在容器上 */
+.st-key-hc_food{gap:0;background:var(--card-bg);border:1px solid var(--line);border-radius:16px;padding:16px 18px;
+  box-shadow:0 6px 22px rgba(30,20,90,.07);animation:popIn .45s var(--ease) both;animation-delay:.24s;
+  transition:transform .25s var(--ease),box-shadow .25s ease,border-color .25s ease}
+.st-key-hc_food:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(108,99,255,.16);border-color:var(--acc)}
+.st-key-hc_food .row{margin:0 -6px}
+/* Streamlit 的 markdown 底部有 -1rem，平常靠區塊間距抵掉；這裡間距是 0，要歸零才不會疊在一起 */
+:is(.st-key-hc_food,[class*="st-key-hc_"],[class*="st-key-hs_"],.st-key-hl_cal) [data-testid="stMarkdownContainer"]{margin-bottom:0}
+.st-key-hc_food .foot{margin-top:auto;padding-top:8px}
+
+@media (max-width:900px){.st-key-home_stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.st-key-home_grid{grid-template-columns:minmax(0,1fr)}}
 </style>"""
 
 
@@ -135,7 +162,7 @@ def stat(ico: str, color: str, label: str, value: str, sub: str) -> str:
             f'<div class="sb">{sub}</div></div></div>')
 
 
-def stats_strip(now: datetime) -> str:
+def stats_strip(now: datetime) -> list[str]:
     cur = now.hour * 60 + now.minute
     items = today_classes(now)
     upcoming = [(s, c) for s, c in items if to_min(s["end"]) > cur]
@@ -172,7 +199,7 @@ def stats_strip(now: datetime) -> str:
     opened, total = open_food(now)
     food = stat(icon("food") or "🍱", "#E08A1E", t("營業中餐廳", "Open now"), f"{len(opened)}<small>{t('家', ' places')}</small>",
                 t(f"校內共 {total} 家", f"{total} on campus"))
-    return f'<div class="stats">{cls}{bus}{exam}{food}</div>'
+    return [cls, bus, exam, food]
 
 
 # ---------- 卡片 ----------
@@ -237,38 +264,67 @@ def bus_summary(now: datetime) -> str:
     return card(head + _grow("".join(rows)))
 
 
-def food_summary(now: datetime) -> str:
+def _food_row(r: dict, s: dict, last: bool) -> str:
+    if s.get("allday"):
+        right = t("24 小時", "24 hours")
+    else:
+        tag = badge(t("快打烊", "Closing soon"), "#E5486F", live=True) + " " if s["key"] == "closing" else ""
+        right = f'{tag}{t("至", "until")} {esc(s.get("end") or "")}'
+    return (f'<div class="row" {"style=border-bottom:none" if last else ""}><span class="t">{esc(r["name"])}'
+            f'<span class="muted">　{esc(r.get("building", ""))}</span></span>'
+            f'<span class="e">{right}</span></div>')
+
+
+def food_box(now: datetime) -> None:
+    """現在營業的餐廳：每一列各自可點（跳到該餐廳），其他地方點了到「校園餐廳」。"""
     opened, _ = open_food(now)
     head = _head((icon("food") or "🍱 ") + t("現在營業的餐廳", "Open restaurants"),
                  badge(t(f"{len(opened)} 家", f"{len(opened)} open"), "#E08A1E") if opened else "")
-    if not opened:
-        return card(head + _grow(empty(icon("night") or "🌙", t("目前沒有營業中的餐廳", "Nothing is open right now"))))
-    rows = []
-    for r, s in opened[:FOOD_ROWS]:
-        if s.get("allday"):
-            right = t("24 小時", "24 hours")
+    with st.container(key="hc_food"):
+        if not opened:
+            html(head + _grow(empty(icon("night") or "🌙", t("目前沒有營業中的餐廳", "Nothing is open right now"))))
         else:
-            tag = badge(t("快打烊", "Closing soon"), "#E5486F", live=True) + " " if s["key"] == "closing" else ""
-            right = f'{tag}{t("至", "until")} {esc(s.get("end") or "")}'
-        rows.append(f'<div class="row"><span class="t">{esc(r["name"])}'
-                    f'<span class="muted">　{esc(r.get("building", ""))}</span></span>'
-                    f'<span class="e">{right}</span></div>')
-    more = (f'<div class="foot muted">{t(f"還有 {len(opened) - FOOD_ROWS} 家營業中，到「校園餐廳」看全部", f"{len(opened) - FOOD_ROWS} more open, see Restaurants")}</div>'
-            if len(opened) > FOOD_ROWS else "")
-    return card(head + _grow("".join(rows)) + more)
+            html(head)
+            shown = opened[:FOOD_ROWS]
+            for i, (r, s) in enumerate(shown):
+                with st.container(key=f"hf_{i}"):
+                    html(_food_row(r, s, i == len(shown) - 1))
+                    if st.button(t(f"查看 {r['name']}", f"View {r['name']}"), key=f"go_f_{i}"):
+                        goto("food", food_focus=r["id"])
+            if len(opened) > FOOD_ROWS:
+                html(f'<div class="foot muted">{t(f"還有 {len(opened) - FOOD_ROWS} 家營業中，到「校園餐廳」看全部", f"{len(opened) - FOOD_ROWS} more open, see Restaurants")}</div>')
+        if st.button(t("前往校園餐廳", "Open Restaurants"), key="go_food"):
+            goto("food")
+
+
+def _linked(key: str, markup: str, slug: str, text: str, **state) -> None:
+    """一個可點的格子：HTML 內容 + 蓋在上面的透明按鈕（鍵盤 Tab 也點得到）。"""
+    with st.container(key=key):
+        html(markup)
+        if st.button(text, key=f"go_{key}"):
+            goto(slug, **state)
 
 
 def render() -> None:
     now = datetime.now()
-    html(HOME_CSS)
+    html(HOME_CSS.replace("\n", ""))  # 壓成一行：多行時 Markdown 會把 [class*=…] 的 * 當成格式，CSS 變成文字
     name = username(st.session_state.get("auth_uid"))
     hero(greeting(now, name), f"{fmt_day(now, year=True)}　{now:%H:%M}　·　{app_title()}", "home")
     mq = marquee_html(now.date())  # 學校行事曆接下來的一個事件；API 與暫存都沒有資料時不顯示
     if mq:
-        html(mq)
-    html(stats_strip(now))
-    html(f'<div class="home home-grid">{class_summary(now)}{exam_summary(now)}'
-         f'{bus_summary(now)}{food_summary(now)}</div>')
+        _linked("hl_cal", mq, "school-calendar", t("前往學校行事曆", "Open School Calendar"))
+    cls, bus, exam, food = stats_strip(now)
+    to_list = {"exam_goto_list": True}  # 考試頁：展開「即將到來的清單」並捲過去
+    with st.container(key="home_stats"):
+        _linked("hs_cls", cls, "timetable", t("前往課表", "Open Timetable"))
+        _linked("hs_bus", bus, "bus", t("前往公車班表", "Open Campus Bus"))
+        _linked("hs_exam", exam, "exams", t("前往考試 / 作業清單", "Open upcoming exams & homework"), **to_list)
+        _linked("hs_food", food, "food", t("前往校園餐廳", "Open Restaurants"))
+    with st.container(key="home_grid"):
+        _linked("hc_cls", class_summary(now), "timetable", t("前往課表", "Open Timetable"))
+        _linked("hc_exam", exam_summary(now), "exams", t("前往考試 / 作業清單", "Open upcoming exams & homework"), **to_list)
+        _linked("hc_bus", bus_summary(now), "bus", t("前往公車班表", "Open Campus Bus"))
+        food_box(now)
 
 
 FEATURE = Feature(title="首頁", icon="🏠", render=render, slug="home", default=True, ico="home",

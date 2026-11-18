@@ -4,7 +4,7 @@ import streamlit as st
 from config import APP_ICON, app_title
 from core.auth import current_uid, sync_cookie
 from core.login import render_account, render_login
-from core import icons
+from core import icons, nav as page_nav
 from core.ui import inject_css
 from features import FEATURES
 
@@ -22,6 +22,7 @@ pages = [
             url_path=None if f.default else f.slug, default=f.default)
     for f in FEATURES
 ]
+page_nav.PAGES.update({f.slug: p for f, p in zip(FEATURES, pages)})  # 讓首頁卡片可以跳到各頁
 
 nav = st.navigation(pages)
 current = next((i for i, p in enumerate(pages, 1) if p.title == nav.title), 0)

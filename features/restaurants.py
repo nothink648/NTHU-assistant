@@ -23,6 +23,7 @@ from core.i18n import t, weekday
 from core import nthu_api, places
 from core.storage import load_json, load_user_json, save_user_json
 from core.icons import has, icon, label
+from core.nav import scroll_to
 from core.ui import badge, esc, hero, html
 from features.base import Feature
 
@@ -50,6 +51,9 @@ _CSS = """
 <style>
 .food-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:6px}
 .food-grid .card{margin:0;display:flex;flex-direction:column;gap:6px}
+.food-grid .card.food-focus{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 35%%,transparent);
+  animation:foodFocus 1s ease-in-out 3}
+@keyframes foodFocus{from,to{transform:none}50%%{transform:scale(1.03)}}
 .food-grid .card:nth-child(n+2){animation-delay:.03s}.food-grid .card:nth-child(n+4){animation-delay:.06s}
 .food-grid .card:nth-child(n+7){animation-delay:.09s}.food-grid .card:nth-child(n+10){animation-delay:.12s}
 .fhead{display:flex;gap:12px;align-items:center}
@@ -86,8 +90,8 @@ _CSS = """
 .spin-result.anim{animation:popIn .5s var(--spring) %(dur2)ss both}
 /* 轉盤按鈕前的骰子 icon（本頁只有這一個主要按鈕） */
 .st-key-food_spin_btn button p::before{content:"";display:inline-block;width:1.1em;height:1.1em;
-  margin-right:6px;vertical-align:-.18em;background:currentColor;-webkit-mask:url(/app/static/icons/dice.png) center/contain no-repeat;
-  mask:url(/app/static/icons/dice.png) center/contain no-repeat}
+  margin-right:6px;vertical-align:-.18em;background:currentColor;-webkit-mask:url(app/static/icons/dice.png) center/contain no-repeat;
+  mask:url(app/static/icons/dice.png) center/contain no-repeat}
 .st-key-my_food_cta{background:linear-gradient(135deg,rgba(108,99,255,.16),rgba(179,157,255,.08)),var(--card-bg);
   border-color:var(--acc-line)!important;height:100%%;justify-content:center}
 /* 和左邊「今天吃什麼？」方框一樣高（欄位本身已等高，撐滿外層包裝即可） */
@@ -628,6 +632,11 @@ def render() -> None:
     now = datetime.now()
     stats = {r["id"]: status(r, now) for r in rests}
     buildings = list(dict.fromkeys(r["building"] for r in rests))
+    focus = st.session_state.pop("food_focus", None)  # 從首頁點了某間餐廳：在「全部」分頁標出來並捲過去
+    if focus not in stats:
+        focus = None
+    elif st.session_state.get("food_q"):
+        st.session_state.food_q = ""  # 清掉搜尋字，避免那間店被篩掉
 
     left, right = st.columns([3, 1.1])
     with right:
@@ -667,7 +676,11 @@ def render() -> None:
                 if not items:
                     st.info(t("沒有符合條件的店家。", "No matching places."))
                     continue
-                html('<div class="food-grid">' + "".join(restaurant_card(r, stats[r["id"]]) for r in items) + "</div>")
+                html('<div class="food-grid">' + "".join(
+                    restaurant_card(r, stats[r["id"]], "food-focus" if bname is None and r["id"] == focus else "")
+                    for r in items) + "</div>")
+        if focus:
+            scroll_to(".food-focus")
 
     with st.container(key="food_info"), st.expander(label("info", t("資料來源與更新", "Data source & updates"))):
         st.markdown(t(f"資料來自 [NTHU Data API](https://api.nthusa.tw/docs)（整理自 [清華總務處經營管理組 — 餐廳及服務性廠商]({SOURCE_URL})），每小時自動更新。",

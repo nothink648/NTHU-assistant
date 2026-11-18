@@ -95,6 +95,7 @@ def route_dir_label(route: dict, direction: dict) -> str:
     return name + t("・", " · ") + tr_place(direction.get("name", ""))
 DEFAULT_FOCUS = "campus"
 PER_ROW = 3  # 「即將發車」每列最多幾張卡片
+NEXT_N = 3  # 「即將發車」每個方向顯示幾班（不足時補空白列，讓各卡片的方向區塊上下對齊）
 
 # 「到站時間」分頁：資料來自 NTHU Data API 的 /buses/schedule?stop=...（依官方時刻表推算，不是 GPS）
 API_LINES = {  # API 的 line -> (名稱, 顏色)
@@ -329,19 +330,35 @@ def route_card(route: dict, now: datetime, default_origin: str) -> str:
                      f'<span class="muted">{origin}</span></div>')
         if not parse_entries(d.get(day, [])):
             if day == "weekend":
-                parts.append(empty(icon("night-sleeping") or "🛌", t("假日無班次", "No weekend service")))
+                msg = empty(icon("night-sleeping") or "🛌", t("假日無班次", "No weekend service"))
             elif not parse_entries(d.get("weekend", [])):
-                parts.append(empty(icon("edit") or "📝", t("尚未填寫班表", "No timetable yet")))
+                msg = empty(icon("edit") or "📝", t("尚未填寫班表", "No timetable yet"))
             else:
-                parts.append(empty(icon("night-sleeping") or "🛌", t("平日無班次", "No weekday service")))
+                msg = empty(icon("night-sleeping") or "🛌", t("平日無班次", "No weekday service"))
+            nxt = []
         else:
-            nxt = get_next_buses(d, now)
-            parts.append("".join(f'<div class="row"><span class="t">{hhmm}{mark_html(mk)}</span>'
-                                 f'<span class="e">{eta_text(m)}</span></div>' for hhmm, m, mk in nxt)
-                         or empty(icon("night-sleeping") or "🌃", t("今天已無班次", "No more buses today")))
+            nxt = get_next_buses(d, now, n=NEXT_N)
+            msg = "" if nxt else empty(icon("night-sleeping") or "🌃", t("今天已無班次", "No more buses today"))
+        rows = "".join(f'<div class="row"><span class="t">{hhmm}{mark_html(mk)}</span>'
+                       f'<span class="e">{eta_text(m)}</span></div>' for hhmm, m, mk in nxt)
+        # 不足 NEXT_N 班時補上看不見的空白列，每個方向固定高度 → 並排卡片的「上山 / 下山」位置對齊
+        pad = '<div class="row pad"><span class="t">00:00</span><span class="e">-</span></div>' * (NEXT_N - len(nxt))
+        parts.append(f'<div class="slots">{rows}{pad}{msg}</div>')
     return (f'<div class="card route" style="border-top:4px solid {c}">'
             f'{head}{note}{"".join(parts)}</div>')
 
+
+# 「即將發車」：卡片用 grid 排，同一列等高；手機直式改一欄
+NEXT_CSS = """<style>
+.bus-grid{display:grid;grid-template-columns:repeat(%d,minmax(0,1fr));gap:16px;align-items:stretch}
+.bus-grid .card.route{height:100%%;margin-bottom:0;box-sizing:border-box}
+.slots{position:relative}
+.slots .row.pad{visibility:hidden}
+.slots .row{border-bottom:1px dashed var(--line)}
+.slots .row:nth-child(%d),.slots .row:has(+ .row.pad){border-bottom-color:transparent}
+.slots>.empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0}
+@media (max-width:640px){.bus-grid{grid-template-columns:minmax(0,1fr)}.slots .row.pad{display:none}.slots>.empty{position:static;padding:10px 0 4px}}  /* 一欄時不需要對齊，空白列拿掉 */
+</style>""" % (PER_ROW, NEXT_N)
 
 ARRIVAL_CSS = """<style>
 .arr .row{align-items:flex-start}
@@ -450,11 +467,8 @@ def render() -> None:
         arrivals_tab(now)
 
     with tab_next:
-        for i in range(0, len(routes), PER_ROW):
-            row = routes[i:i + PER_ROW]
-            for col, r in zip(st.columns(PER_ROW), row):
-                with col:
-                    html(route_card(r, now, default_origin))
+        html(NEXT_CSS.replace("\n", ""))
+        html('<div class="bus-grid">' + "".join(route_card(r, now, default_origin) for r in routes) + "</div>")
 
     with tab_all:
         for r in routes:

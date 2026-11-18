@@ -437,7 +437,12 @@
   "Nothing coming up. Click a day on the calendar or use “Add exam or homework” above.": "Chưa có gì sắp tới. Nhấn vào một ngày trên lịch hoặc dùng “Thêm bài thi hoặc bài tập” ở trên.",
   "Automatically filling in hours from Google Maps is still being improved; please enter them yourself for now.": "Tính năng tự động điền giờ mở cửa từ Google Maps vẫn đang được hoàn thiện; hiện tại vui lòng tự nhập.",
   "Pick a course I've added": "Chọn môn đã thêm",
-  "Enter a new course": "Nhập môn học mới"
+  "Enter a new course": "Nhập môn học mới",
+  "Open Restaurants": "Mở Nhà hàng",
+  "Open School Calendar": "Mở Lịch học vụ",
+  "Open Timetable": "Mở Thời khóa biểu",
+  "Open Campus Bus": "Mở Xe buýt trường",
+  "Open upcoming exams & homework": "Mở danh sách thi & bài tập sắp tới"
  },
  "templates": {
   "Username changed to “{0}”. Use it next time you sign in": "Đã đổi tên người dùng thành “{0}”. Lần sau hãy đăng nhập bằng tên mới",
@@ -510,6 +515,7 @@
   "Upcoming list ({0} exams, {1} homework)": "Danh sách sắp tới ({0} bài thi, {1} bài tập)",
   "Items within {0} days are shown in red　·　Use ⋮ on a card to edit, link a course or delete": "Mục trong vòng {0} ngày được tô đỏ　·　Dùng ⋮ trên thẻ để sửa, liên kết môn học hoặc xóa",
   "Add on {0}": "Thêm vào {0}",
-  "{0} this month": "{0} trong tháng này"
+  "{0} this month": "{0} trong tháng này",
+  "View {0}": "Xem {0}"
  }
 }

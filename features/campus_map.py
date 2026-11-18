@@ -15,7 +15,7 @@ from features.base import Feature
 
 MAP_URL = "https://3dcampusguide.nthu.edu.tw/?openExternalBrowser=1"
 ROADS_FILE = Path(__file__).resolve().parent.parent / "static" / "maps" / "campus_roads.jpg"
-ROADS_URL = "/app/static/maps/campus_roads.jpg"  # 需 .streamlit/config.toml 開 enableStaticServing
+ROADS_URL = "app/static/maps/campus_roads.jpg"  # 相對網址（開頭不加 /，Streamlit Cloud 才找得到）；需 config.toml 開 enableStaticServing
 SIZES = {"小": 480, "中": 650, "大": 850}  # 視窗高度（px）
 SIZES_EN = {"小": "Small", "中": "Medium", "大": "Large"}
 # 2D 道路圖檢視器裡的文字（英文介面時替換）
