@@ -162,7 +162,11 @@ def css(nav_icons: list[str]) -> str:
                       ("[class*='st-key-save_'] button p", "save"),   # 儲存課程 / 考試修改
                       (".st-key-food_refresh button p", "refresh"),   # 餐廳「立即更新」
                       (".st-key-food_info summary p", "info"),        # 餐廳「資料來源與更新」
-                      (".st-key-bus_stop label p", "pin")):           # 公車「我在哪一站」
+                      (".st-key-bus_stop label p", "pin"),            # 公車「我在哪一站」
+                      ("[class*='st-key-acct_edit_'] button p", "edit"),  # 帳號設定「修改帳號名稱 / 密碼」
+                      (".st-key-mf_add button p", "add"),                    # 餐廳「加入我的餐廳」
+                      ("[class*='st-key-mf_ref_'] button p", "refresh"),     # 我的餐廳「更新」
+                      (".st-key-mf_open button p", "add")):                   # 轉盤旁「新增餐廳」
         rules.append(before_css(sel, name))
     rules.append("[class*='st-key-del_slot_'] button p::before{margin-right:0}")  # 只有圖示的刪除鈕
     if has("web"):  # 登入頁右上角的語言選單：前面畫地球

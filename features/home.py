@@ -20,7 +20,7 @@ from features.bus_schedule import (eta_text, focus_short, focus_routes, get_dire
                                    load_bus_data, mark_html, route_color, route_dir_label)
 from features.exam_reminder import (WARN_DAYS, countdown_text, course_html, exam_datetime, get_upcoming_exams,
                                     kind_badge, kind_name, links_html, when_html)
-from features.restaurants import all_restaurants, load_data as load_food, status
+from features.restaurants import all_restaurants, load_data as load_food, my_restaurants, status
 from features.school_calendar import marquee_html
 from features.timetable import to_min, today_classes
 
@@ -119,7 +119,7 @@ def next_bus(now: datetime) -> tuple[str, int] | None:
 
 def open_food(now: datetime) -> tuple[list[tuple[dict, dict]], int]:
     """(營業中的餐廳 [(店, 狀態)]，快打烊的排前面；餐飲類總數)。"""
-    foods = [r for r in all_restaurants(load_food()) if r["is_food"]]
+    foods = [r for r in all_restaurants(load_food()) + my_restaurants() if r["is_food"]]
     opened = [(r, s) for r in foods for s in [status(r, now)] if s["is_open"]]
     opened.sort(key=lambda x: (x[1]["key"] != "closing", x[0]["name"]))
     return opened, len(foods)

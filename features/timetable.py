@@ -24,6 +24,8 @@ from features.base import Feature
 
 DATA_FILE = "timetable.json"
 NEW = "__new__"
+ADD_AUTO, ADD_MANUAL = "auto", "manual"  # 新增方式：搜尋課程資料庫自動帶入 / 手動輸入
+SRC_EXIST, SRC_NEW = "exist", "new"  # 手動輸入時：沿用已填過的課程 / 輸入新課程
 MODE_P, MODE_C = "依學校節次", "自訂時間"  # 內部值（存在 session）；顯示文字用 mode_label()
 PERIOD_TIME = {label: (start, end) for label, start, end in PERIODS}
 PERIOD_LABELS = [p[0] for p in PERIODS]
@@ -105,6 +107,7 @@ def today_classes(now: datetime | None = None) -> list[tuple[dict, dict]]:
 def _init_state() -> None:
     ss = st.session_state
     ss.setdefault("tt_course", NEW)
+    ss.setdefault("tt_src", SRC_NEW)
     for k in ("tt_name", "tt_teacher", "tt_room", "tt_note"):
         ss.setdefault(k, "")
     ss.setdefault("tt_credits", 2.0)
@@ -127,6 +130,17 @@ def _on_course_change() -> None:
     ss.tt_room = course.get("room", "") if course else ""
     ss.tt_credits = float(course.get("credits", 0)) if course else 2.0
     ss.tt_note = course.get("note", "") if course else ""
+
+
+def _on_src_change() -> None:
+    """切換「已填過的課程 / 新課程」：已填過的先帶入第一門課，新課程則清空欄位。"""
+    ss = st.session_state
+    if ss.tt_src == SRC_NEW:
+        ss.tt_course = NEW
+    else:
+        courses = sorted(load_data()["courses"], key=lambda c: c["name"].casefold())
+        ss.tt_course = courses[0]["id"] if courses else NEW
+    _on_course_change()
 
 
 def _on_start_change() -> None:
@@ -184,6 +198,7 @@ def _add_slots() -> None:
     save_data(data)
 
     ss.tt_course = course["id"]  # 之後再填同一門課的其他時段更方便
+    ss.tt_src = SRC_EXIST
     if added:
         ss.tt_days = []  # 清空星期，避免重複按到又加一次
         ss.tt_msgs.append(("success", t(f"已新增「{name}」：{'、'.join(added)} {start}–{end}",
@@ -339,14 +354,15 @@ def _catalog_lookup() -> None:
         st.markdown(f"**{icon('search') or '🔍'} {t('輸入課號或課名，一鍵加入課表', 'Find a course by number or name')}**",
                     unsafe_allow_html=True)
         if not semesters:
-            st.warning(t("暫時連不上課程資料 API，請改用下方手動填寫。",
-                         "The course API is unreachable right now; please fill in the form below instead."))
+            st.warning(t("暫時連不上課程資料 API，請改選上方的「手動輸入」。",
+                         "The course API is unreachable right now; please switch to “Manual entry” above."))
             return
         c1, c2 = st.columns([1, 3])
         sem = c1.selectbox(t("學期", "Semester"), semesters, format_func=semester_label, key="tt_sem")
         q = c2.text_input(t("課號 / 課名 / 老師", "Course no. / name / teacher"), key="tt_q",
                           placeholder=t("例如：CS 233601、離散數學、微積分 顏東勇", "e.g. CS 233601, Discrete Mathematics"))
         if not q.strip():
+            _search_help()
             return
         with st.spinner(t("正在載入本學期課程…", "Loading this semester's courses…")):
             catalog, err = load_catalog(sem)
@@ -354,7 +370,9 @@ def _catalog_lookup() -> None:
             st.caption(err)
         found = search_catalog(catalog, q)
         if not found:
-            st.info(t("找不到符合的課程，換個關鍵字試試。", "No matching courses. Try another keyword."))
+            st.info(t("找不到符合的課程，換個關鍵字試試；資料庫沒有的課請改選「手動輸入」。",
+                      "No matching courses. Try another keyword, or switch to “Manual entry” for courses not in the catalog."))
+            _search_help()
             return
         by_id = {c["id"]: c for c in found}
         pick = st.selectbox(t(f"搜尋結果（{len(found)} 筆{'，只列前 ' + str(SEARCH_LIMIT) + ' 筆' if len(found) >= SEARCH_LIMIT else ''}）",
@@ -369,6 +387,21 @@ def _catalog_lookup() -> None:
         st.button(label("add", t("加入課表", "Add to timetable")), type="primary", key="tt_lookup_add",
                   on_click=_add_catalog_course, args=(c,), disabled=bool(c.get("is_cancelled")))
     _show_msgs("tt_lookup_msgs")
+
+
+def _search_help() -> None:
+    """可以被搜尋到的輸入格式。"""
+    lines = [
+        t("可以這樣輸入：", "You can search by:"),
+        t("・課號：CS 233601、cs233601（大小寫、空白都沒關係），只打開頭 CS 2336 也可以",
+          "・Course no.: CS 233601 or cs233601 (case and spaces don't matter); a prefix like CS 2336 also works"),
+        t("・課名：中文或英文，打一部分也可以，例如 離散數學、微積分、Calculus",
+          "・Course name: Chinese or English, or just part of it, e.g. Calculus, Discrete, 微積分"),
+        t("・老師：例如 顏東勇", "・Teacher: e.g. 顏東勇"),
+        t("・多個關鍵字用空格隔開，要全部符合，例如 微積分 顏東勇",
+          "・Several keywords separated by spaces must all match, e.g. Calculus 顏東勇"),
+    ]
+    st.caption("  \n".join(lines))
 
 
 def _show_msgs(key: str) -> None:
@@ -493,18 +526,34 @@ def _tab_overview(data: dict) -> None:
 def _tab_add(data: dict) -> None:
     ss = st.session_state
     names = {c["id"]: c["name"] for c in data["courses"]}
-    options = [NEW] + sorted(names, key=lambda i: names[i].casefold())
-    if ss.tt_course not in options:
-        ss.tt_course = NEW
+    options = sorted(names, key=lambda i: names[i].casefold())
 
-    _catalog_lookup()
-    st.markdown(f"<div class='muted' style='margin:6px 2px'>{t('或手動填寫（課程資料庫沒有的課、自訂時段）', 'Or fill in manually (courses not in the catalog, custom times)')}</div>",
-                unsafe_allow_html=True)
+    st.radio(t("新增方式", "How do you want to add it?"), [ADD_AUTO, ADD_MANUAL], key="tt_add_mode", horizontal=True,
+             format_func=lambda m: t("自動帶入（搜尋課號 / 課名）", "Auto-fill (search by course no. / name)") if m == ADD_AUTO
+             else t("手動輸入", "Manual entry"))
+    if ss.tt_add_mode == ADD_AUTO:
+        _catalog_lookup()
+        return
+
+    # 手動輸入：先選要沿用已填過的課程，還是輸入一門新課程
+    if not options:
+        ss.tt_src = SRC_NEW
+    elif ss.tt_src == SRC_EXIST and ss.tt_course not in options:  # 課程被刪掉等情況 → 改帶入第一門
+        ss.tt_course = options[0]
+        _on_course_change()
+    elif ss.tt_src == SRC_NEW and ss.tt_course != NEW:
+        ss.tt_course = NEW
+        _on_course_change()
+    if options:
+        st.radio(t("課程來源", "Course"), [SRC_EXIST, SRC_NEW], key="tt_src", horizontal=True, on_change=_on_src_change,
+                 format_func=lambda m: t("選擇已填過的課程", "Pick a course I've added") if m == SRC_EXIST
+                 else t("手動輸入新課程", "Enter a new course"))
+
     with st.container(border=True):
         st.markdown(f"**{icon('book') or '📘'} {t('課程資料', 'Course info')}**", unsafe_allow_html=True)
-        st.selectbox(t("選擇已填過的課程（會自動帶入資料）", "Pick an existing course (fills in its details)"), options,
-                     key="tt_course", format_func=lambda i: t("➕ 新課程", "➕ New course") if i == NEW else names[i],
-                     on_change=_on_course_change)
+        if ss.tt_src == SRC_EXIST:
+            st.selectbox(t("選擇已填過的課程（會自動帶入資料）", "Pick an existing course (fills in its details)"), options,
+                         key="tt_course", format_func=lambda i: names[i], on_change=_on_course_change)
         c1, c2 = st.columns([3, 1])
         c1.text_input(t("課程名稱", "Course name"), key="tt_name", placeholder=t("例如：微積分", "e.g. Calculus"))
         c2.number_input(t("學分", "Credits"), min_value=0.0, max_value=12.0, step=1.0, format="%g", key="tt_credits")
@@ -535,8 +584,9 @@ def _tab_add(data: dict) -> None:
     st.button(label("add", t("新增這個時段", "Add this slot")), type="primary", on_click=_add_slots, key="tt_add_btn")
 
     _show_msgs("tt_msgs")
-    st.caption(t("選已填過的課程時，修改教授 / 學分 / 備註會一併更新該課程；想改課程名稱請到「課程管理」。",
-                 "Editing teacher / credits / note of an existing course updates that course; rename courses under “Manage courses”."))
+    if ss.tt_src == SRC_EXIST:
+        st.caption(t("選已填過的課程時，修改教授 / 學分 / 備註會一併更新該課程；想改課程名稱請到「課程管理」。",
+                     "Editing teacher / credits / note of an existing course updates that course; rename courses under “Manage courses”."))
 
 
 def _tab_manage(data: dict) -> None:

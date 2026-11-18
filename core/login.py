@@ -6,7 +6,7 @@ import streamlit as st
 from config import app_title
 from core import auth
 from core.i18n import lang_select, t
-from core.icons import has, icon
+from core.icons import has, icon, label
 from core.ui import esc, html
 
 _CSS = """<style>
@@ -107,23 +107,47 @@ def _account_settings(uid: str, name: str) -> None:
     html(f'<div class="acct-h">{icon("web") or "🌐"} {t("介面語言", "Language")}</div>')
     lang_select("acct_lang")
 
-    html(f'<div class="acct-h">{icon("person") or "👤"} {t("帳號名稱", "Username")}</div>')
-    with st.form("chname", clear_on_submit=True, border=False):
-        new_name = st.text_input(t("新帳號名稱", "New username"), placeholder=name, key="chname_new",
-                                 help=t("2–20 個字，可用中文、英文、數字或底線", "2–20 characters: Chinese, letters, digits or underscores"))
-        pw = st.text_input(t("目前密碼", "Current password"), type="password", key="chname_pw")
-        if st.form_submit_button(t("更新帳號名稱", "Update username"), use_container_width=True):
-            ok, msg = auth.change_username(uid, new_name, pw)
-            if ok:
-                st.session_state.acct_flash = msg
-                st.rerun()  # 讓上方的名稱、首頁問候語立刻換成新名字
-            st.error(msg)
+    ss = st.session_state
+    editing = ss.get("acct_edit")  # 目前展開的修改表單："name" / "pw" / None；按了按鈕才顯示
 
-    html(f'<div class="acct-h">{icon("key") or "🔑"} {t("修改密碼", "Change password")}</div>')
-    with st.form("chpw", clear_on_submit=True, border=False):
-        old = st.text_input(t("目前密碼", "Current password"), type="password", key="chpw_old")
-        new = st.text_input(t("新密碼", "New password"), type="password", key="chpw_new")
-        new2 = st.text_input(t("再輸入一次新密碼", "Confirm new password"), type="password", key="chpw_new2")
-        if st.form_submit_button(t("更新密碼", "Update password"), use_container_width=True):
-            ok, msg = auth.change_password(uid, old, new, new2)
-            (st.success if ok else st.error)(msg)
+    html(f'<div class="acct-h">{icon("person") or "👤"} {t("帳號名稱", "Username")}</div>')
+    if editing != "name":
+        st.button(label("edit", t("修改帳號名稱", "Change username")), key="acct_edit_name",
+                  on_click=_set_edit, args=("name",), use_container_width=True)
+    else:
+        with st.form("chname", clear_on_submit=True, border=False):
+            new_name = st.text_input(t("新帳號名稱", "New username"), placeholder=name, key="chname_new",
+                                     help=t("2–20 個字，可用中文、英文、數字或底線", "2–20 characters: Chinese, letters, digits or underscores"))
+            pw = st.text_input(t("目前密碼", "Current password"), type="password", key="chname_pw")
+            c1, c2 = st.columns(2)
+            submit = c1.form_submit_button(t("更新", "Update"), type="primary", use_container_width=True)
+            c2.form_submit_button(t("取消", "Cancel"), on_click=_set_edit, args=(None,), use_container_width=True)
+            if submit:
+                ok, msg = auth.change_username(uid, new_name, pw)
+                if ok:
+                    ss.acct_flash, ss.acct_edit = msg, None
+                    st.rerun()  # 讓上方的名稱、首頁問候語立刻換成新名字
+                st.error(msg)
+
+    html(f'<div class="acct-h">{icon("key") or "🔑"} {t("密碼", "Password")}</div>')
+    if editing != "pw":
+        st.button(label("edit", t("修改密碼", "Change password")), key="acct_edit_pw",
+                  on_click=_set_edit, args=("pw",), use_container_width=True)
+    else:
+        with st.form("chpw", clear_on_submit=True, border=False):
+            old = st.text_input(t("目前密碼", "Current password"), type="password", key="chpw_old")
+            new = st.text_input(t("新密碼", "New password"), type="password", key="chpw_new")
+            new2 = st.text_input(t("再輸入一次新密碼", "Confirm new password"), type="password", key="chpw_new2")
+            c1, c2 = st.columns(2)
+            submit = c1.form_submit_button(t("更新", "Update"), type="primary", use_container_width=True)
+            c2.form_submit_button(t("取消", "Cancel"), on_click=_set_edit, args=(None,), use_container_width=True)
+            if submit:
+                ok, msg = auth.change_password(uid, old, new, new2)
+                if ok:
+                    ss.acct_flash, ss.acct_edit = msg, None
+                    st.rerun()
+                st.error(msg)
+
+
+def _set_edit(which: str | None) -> None:
+    st.session_state.acct_edit = which

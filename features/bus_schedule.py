@@ -408,8 +408,7 @@ def timetable_df(entries: list[tuple[str, str]]) -> pd.DataFrame:
 def render() -> None:
     data, err = load_bus_data()
     default_origin = data.get("origin", "")
-    hero(t("公車班表", "Campus Bus"), t("校本部綠線、紅線　·　往返南大校區　·　編輯 data/bus_schedule.json 更新",
-                                     "Green & Red lines　·　Nanda campus shuttle　·　Edit data/bus_schedule.json to update"), "bus")
+    hero(t("公車班表", "Campus Bus"), t("校本部綠線、紅線　·　往返南大校區", "Green & Red lines　·　Nanda campus shuttle"), "bus")
 
     if err:
         st.error(err)
