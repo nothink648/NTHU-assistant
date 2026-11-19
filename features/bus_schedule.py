@@ -30,6 +30,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+from core import clock
 from config import DATA_DIR
 from core import nthu_api
 from core.i18n import is_en, t
@@ -256,7 +257,7 @@ def runs_today(mark: str, now: datetime) -> bool:
 def get_next_buses(direction: dict, now: datetime | None = None,
                    day: str | None = None, n: int = 3) -> list[tuple[str, int, str]]:
     """回傳 [(發車時間, 幾分鐘後, 註記), ...]，最多 n 班。direction 為一個方向（含 weekday / weekend 欄位）。"""
-    now = now or datetime.now()
+    now = now or clock.now()
     day = day or day_key(now)
     if day not in SERVICE_DAYS:
         return []
@@ -435,7 +436,7 @@ def render() -> None:
         st.radio(t("關注路線", "Favorite routes"), list(FOCUS), index=list(FOCUS).index(get_focus()),
                  label_visibility="collapsed", format_func=focus_label, horizontal=True, key="bus_focus", on_change=_save_focus)
 
-    now = datetime.now()
+    now = clock.now()
     if day_key(now) == "weekend":
         st.info(t("今天是假日，只有南大校區路線有少量班次。", "It's the weekend: only a few Nanda campus buses run."))
     elif now.weekday() == 4:

@@ -12,6 +12,7 @@ from datetime import datetime, time
 
 import streamlit as st
 
+from core import clock
 from core.i18n import fmt_day, t
 from core.storage import load_user_json, save_user_json
 from core.icons import before_css, icon, label
@@ -76,13 +77,13 @@ def _valid(exam) -> bool:
 
 
 def get_upcoming_exams(now: datetime | None = None) -> list[dict]:
-    now = now or datetime.now()
+    now = now or clock.now()
     upcoming = [e for e in load_exams() if _valid(e) and exam_datetime(e) >= now]
     return sorted(upcoming, key=exam_datetime)
 
 
 def countdown_text(target: datetime, now: datetime | None = None) -> str:
-    now = now or datetime.now()
+    now = now or clock.now()
     delta = target - now
     days = delta.days
     hours = delta.seconds // 3600
@@ -194,7 +195,7 @@ def render() -> None:
                     place = place.strip() or (course.get("room", "") if course else "")
                 if not subject:
                     st.warning(t(f"請選擇課表科目或輸入{name}名稱", "Choose a course or enter a name"))
-                elif when < datetime.now():
+                elif when < clock.now():
                     st.warning(t("這個時間已經過了，請確認日期與時間", "That time has already passed, please check the date and time"))
                 elif bad:
                     st.warning(t("以下連結格式不正確（需以 http:// 或 https:// 開頭）：", "These links are invalid (must start with http:// or https://): ")
@@ -207,7 +208,7 @@ def render() -> None:
                     save_exams(exams)
                     st.toast(t(f"已新增{name}：{subject}", f"Added {name.lower()}: {subject}"), icon=":material/check_box:")
 
-    now = datetime.now()
+    now = clock.now()
     upcoming = get_upcoming_exams(now)
 
     if not upcoming:
@@ -304,7 +305,7 @@ def _save_edit(exam: dict) -> None:
                 e["place"] = ss.get(f"ed_place_{eid}", "").strip()
     save_exams(exams)
     st.toast(t(f"已更新：{subject}", f"Updated: {subject}")
-             + (t("（時間已過，不會再顯示在清單）", " (time has passed, it won't be listed)") if when < datetime.now() else ""),
+             + (t("（時間已過，不會再顯示在清單）", " (time has passed, it won't be listed)") if when < clock.now() else ""),
              icon=":material/edit:")
 
 

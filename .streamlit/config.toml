@@ -6,5 +6,5 @@
 enableStaticServing = true
 
 [client]
-# 右上角選單隱藏開發者選項（Rerun、Clear cache、Deploy）；Print / Record screen 由 core/ui.py 的 CSS 隱藏
-toolbarMode = "viewer"
+# 右上角三點選單：auto = 本機開發與 Cloud 上的 App 擁有者看得到 Rerun、Clear cache 等開發者選項，一般訪客只看到精簡選單
+toolbarMode = "auto"

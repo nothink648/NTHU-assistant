@@ -16,6 +16,7 @@ from datetime import date, datetime
 
 import streamlit as st
 
+from core import clock
 from core.i18n import t
 from core import nthu_api
 from core.storage import load_json
@@ -359,7 +360,7 @@ def render() -> None:
         st.warning(data["error"] + (t("（目前顯示離線備份資料）", " (showing offline backup data)") if data.get("offline") and rests else ""))
     if not rests:
         st.info(t("目前沒有餐廳資料，請稍後再試。", "No restaurant data right now. Please try again later."))
-    now = datetime.now()
+    now = clock.now()
     stats = {r["id"]: status(r, now) for r in rests}
     buildings = list(dict.fromkeys(r["building"] for r in rests))
 

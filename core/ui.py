@@ -56,7 +56,14 @@ _CSS = """
   50%{transform:translate(-8%,4%) rotate(-12deg) scale(.95)}100%{transform:translate(5%,-6%) rotate(8deg) scale(1.1)}}
 @keyframes dotsDrift{from{transform:translate3d(0,0,0)}to{transform:translate3d(34px,68px,0)}}
 [data-testid="stHeader"]{background:transparent!important}
-/* 右上角選單只留主題切換：隱藏 Print、Record screen（Rerun / Clear cache / Deploy 由 config.toml 的 toolbarMode="viewer" 隱藏） */
+/* ---------- 頂部列與平台圖示 ----------
+   保留：頂部列、右上工具列、三點選單（Rerun / Settings / Clear cache…）、本機的 Running 狀態提示、左上 >> 側邊欄鈕。
+   只隱藏：Fork / GitHub 圖示、頂部裝飾彩條、Streamlit Cloud 右下角的皇冠與開發者頭像徽章。 */
+[data-testid="stHeader"],[data-testid="stToolbar"]{display:flex!important;visibility:visible!important}
+#MainMenu,[data-testid="stMainMenu"],[data-testid="stStatusWidget"]{display:block!important;visibility:visible!important;pointer-events:auto!important}
+[data-testid="stToolbarActions"],[data-testid="stDecoration"],
+[class*="viewerBadge"],[data-testid="manage-app-button"],.stAppDeployButton,[data-testid="stAppDeployButton"]{display:none!important}
+/* 三點選單裡只隱藏 Print、Record screen（Rerun / Clear cache 等開發者選項由 config.toml 的 toolbarMode 決定） */
 [data-testid="stMainMenuItem-print"],[data-testid="stMainMenuItem-recordScreencast"],[data-testid="stMainMenuDivider"]{display:none!important}
 /* 寫登入 cookie 用的隱形元件（見 core/auth.py）不佔版面 */
 :is([data-testid="stElementContainer"],.element-container):has(iframe[srcdoc*="nthu_assistant_s"]){display:none!important}
@@ -75,7 +82,6 @@ _CSS = """
 
 /* ---------- 版面 ---------- */
 .block-container,[data-testid="stMainBlockContainer"]{padding-top:2.4rem;padding-bottom:3rem;max-width:1100px}
-[data-testid="stDecoration"]{background:linear-gradient(90deg,var(--acc),var(--acc3))!important;height:3px}
 hr{border-color:var(--line)!important}
 
 /* 換頁 / 切換分頁時，內容由下往上淡入 */

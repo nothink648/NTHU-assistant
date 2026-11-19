@@ -117,6 +117,9 @@ def _mask(name: str) -> str:
     return f"-webkit-mask-image:url({u});mask-image:url({u})"
 
 
+mask_css = _mask  # 給其他模組用：回傳某個 icon 的 CSS mask-image 宣告
+
+
 def css(nav_icons: list[str]) -> str:
     """全域 icon 樣式。nav_icons：側邊欄各頁面依序使用的 icon 名稱（沒有圖就給空字串）。"""
     rules = [

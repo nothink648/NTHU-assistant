@@ -7,6 +7,7 @@ from email.utils import parsedate_to_datetime
 import pandas as pd
 import streamlit as st
 
+from core import clock
 from core import nthu_api
 from core.i18n import is_en, t, tr
 from core.icons import before_css, icon, label, tab_css
@@ -82,7 +83,7 @@ def spaces_tab() -> None:
 
 # ---------- 開館時間 ----------
 def hours_tab() -> None:
-    today = date.today()
+    today = clock.today()
     st.caption(t("各館開館行事曆（含國定假日、考試週延長開放等）。",
                  "Opening hours of each library (including holidays and extended exam-week hours)."))
     cards = []

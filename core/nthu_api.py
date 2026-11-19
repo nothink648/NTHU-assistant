@@ -13,11 +13,11 @@ import json
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime
 from typing import Any
 
 import streamlit as st
 
+from core import clock
 from config import DATA_DIR
 from core.i18n import t
 
@@ -36,7 +36,7 @@ def _save_cache(url: str, data: Any) -> None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path = _cache_path(url)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"url": url, "saved_at": datetime.now().strftime("%Y/%m/%d %H:%M"), "data": data},
+        tmp.write_text(json.dumps({"url": url, "saved_at": clock.now().strftime("%Y/%m/%d %H:%M"), "data": data},
                                   ensure_ascii=False), encoding="utf-8")
         tmp.replace(path)
     except OSError:

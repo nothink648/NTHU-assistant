@@ -20,6 +20,7 @@ from datetime import date
 
 import streamlit as st
 
+from core import clock
 from config import DATA_DIR
 from core.i18n import is_en, t, tr
 from core.icons import before_css, icon, label
@@ -225,7 +226,7 @@ def render() -> None:
 
     name = _choose(t("場館", "Facility"), names, "sp_venue", names[0], venue_label)
     v = by_name[name]
-    today = date.today()
+    today = clock.today()
     with st.spinner(t("正在讀取時間表…", "Loading the timetable…")):
         current = guess_term(v["links"], today)
     terms = [x for x in TERMS if x in v["links"]]

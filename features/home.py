@@ -10,10 +10,12 @@ from datetime import datetime
 
 import streamlit as st
 
+from core import clock
 from config import app_title
 from core.auth import username
 from core.i18n import fmt_day, is_en, t, tr, weekday
 from core.icons import icon
+from core.nav import go
 from core.ui import badge, card, empty, esc, hero, html
 from features.base import Feature
 from features.bus_schedule import (eta_text, focus_short, focus_routes, get_directions, get_focus, get_next_buses,
@@ -31,14 +33,29 @@ HOME_CSS = """<style>
 /* 卡片陰影 */
 .home .card,.stat{box-shadow:0 6px 22px rgba(30,20,90,.07)}
 
-/* 四格速覽 */
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:6px 0 16px}
+/* 四格速覽：每張卡片是一個 st.container(key="stat_<頁面>")，裡面一層透明按鈕蓋滿整張卡片 → 整張都能點 */
+.st-key-home_stats{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px!important;margin:6px 0 16px}
+.st-key-home_stats>*{display:flex!important;flex-direction:column;width:auto!important;min-width:0!important;max-width:none!important;margin:0!important}
+[class*="st-key-stat_"]{position:relative;flex:1;gap:0!important;border-radius:16px;overflow:hidden;
+  transition:transform .25s var(--ease)}
+[class*="st-key-stat_"]:hover{transform:translateY(-3px)}
+[class*="st-key-stat_"] :is([data-testid="stElementContainer"],.element-container):has(.stat){flex:1;display:flex;flex-direction:column;margin:0!important}
+[class*="st-key-stat_"] :is([data-testid="stMarkdown"],[data-testid="stMarkdownContainer"],[data-testid="stMarkdownContainer"]>div):has(.stat){flex:1;height:100%;margin:0!important}
+[class*="st-key-stat_"] .stat,[class*="st-key-stat_"] .stat *{pointer-events:none}
 .stat{position:relative;overflow:hidden;display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;
+  box-sizing:border-box;height:100%;
   background:var(--card-bg);border:1px solid var(--line);animation:popIn .45s var(--ease) both;
-  transition:transform .25s var(--ease),box-shadow .25s ease}
-.stat:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(108,99,255,.16)}
+  transition:box-shadow .25s ease,border-color .25s ease}
+[class*="st-key-stat_"]:hover .stat{box-shadow:0 12px 26px rgba(108,99,255,.16);border-color:var(--acc-line)}
+.st-key-stat_bus .stat{animation-delay:.06s}.st-key-stat_exams .stat{animation-delay:.12s}.st-key-stat_food .stat{animation-delay:.18s}
+/* 透明按鈕：絕對定位 inset:0，剛好貼齊卡片外框（外層 overflow:hidden + 同樣圓角，不會超出白框） */
+[class*="st-key-go_stat_"]{position:absolute!important;inset:0;z-index:3;width:auto!important;height:auto!important;margin:0!important}
+[class*="st-key-go_stat_"] :is(.stButton,div:has(>button),button){width:100%!important;height:100%!important;max-width:none!important}
+[class*="st-key-go_stat_"] button{min-height:0!important;padding:0!important;margin:0!important;border:none!important;border-radius:16px!important;
+  background:transparent!important;box-shadow:none!important;transform:none!important;cursor:pointer}
+[class*="st-key-go_stat_"] button p{opacity:0}
+[class*="st-key-go_stat_"] button:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
 .stat .bar{position:absolute;left:0;right:0;top:0;height:3px}
-.stat:nth-child(2){animation-delay:.06s}.stat:nth-child(3){animation-delay:.12s}.stat:nth-child(4){animation-delay:.18s}
 .stat .ic{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:1.35rem}
 .stat .ic .ico{width:24px;height:24px;vertical-align:0}
 .stat .lb{font-size:.78rem;opacity:.65;font-weight:600}
@@ -55,7 +72,7 @@ HOME_CSS = """<style>
 .home-grid>.card:nth-child(4){animation-delay:.24s}
 .home-grid .foot{margin-top:auto;padding-top:8px}
 
-@media (max-width:900px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:900px){.st-key-home_stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:640px){.home-grid{grid-template-columns:1fr}}
 </style>"""
 
@@ -135,7 +152,8 @@ def stat(ico: str, color: str, label: str, value: str, sub: str) -> str:
             f'<div class="sb">{sub}</div></div></div>')
 
 
-def stats_strip(now: datetime) -> str:
+def stats_cards(now: datetime) -> list[tuple[str, str, str]]:
+    """四格速覽：[(要跳去的頁面 slug, 按鈕名稱, 卡片 HTML)]。"""
     cur = now.hour * 60 + now.minute
     items = today_classes(now)
     upcoming = [(s, c) for s, c in items if to_min(s["end"]) > cur]
@@ -172,7 +190,18 @@ def stats_strip(now: datetime) -> str:
     opened, total = open_food(now)
     food = stat(icon("food") or "🍱", "#E08A1E", t("營業中餐廳", "Open now"), f"{len(opened)}<small>{t('家', ' places')}</small>",
                 t(f"校內共 {total} 家", f"{total} on campus"))
-    return f'<div class="stats">{cls}{bus}{exam}{food}</div>'
+    return [("timetable", today_lb, cls), ("bus", t("下一班公車", "Next bus"), bus),
+            ("exams", t("考試 / 作業", "Exams & homework"), exam), ("food", t("營業中餐廳", "Open now"), food)]
+
+
+def render_stats(now: datetime) -> None:
+    """四格速覽：整張卡片都是按鈕，點了切到對應頁面。"""
+    with st.container(key="home_stats"):
+        for slug, name, markup in stats_cards(now):
+            with st.container(key=f"stat_{slug}"):
+                html(markup)
+                if st.button(name, key=f"go_stat_{slug}"):
+                    go(slug)
 
 
 # ---------- 卡片 ----------
@@ -259,14 +288,14 @@ def food_summary(now: datetime) -> str:
 
 
 def render() -> None:
-    now = datetime.now()
+    now = clock.now()
     html(HOME_CSS)
     name = username(st.session_state.get("auth_uid"))
     hero(greeting(now, name), f"{fmt_day(now, year=True)}　{now:%H:%M}　·　{app_title()}", "home")
     mq = marquee_html(now.date())  # 學校行事曆接下來的一個事件；API 與暫存都沒有資料時不顯示
     if mq:
         html(mq)
-    html(stats_strip(now))
+    render_stats(now)
     html(f'<div class="home home-grid">{class_summary(now)}{exam_summary(now)}'
          f'{bus_summary(now)}{food_summary(now)}</div>')
 
