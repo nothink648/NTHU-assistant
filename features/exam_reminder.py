@@ -13,6 +13,7 @@ from datetime import date, datetime, time
 
 import streamlit as st
 
+from config import now_tw, today_tw
 from core.i18n import fmt_day, month_year, t, weekday
 from core.nav import scroll_to
 from core.storage import load_user_json, save_user_json
@@ -78,13 +79,13 @@ def _valid(exam) -> bool:
 
 
 def get_upcoming_exams(now: datetime | None = None) -> list[dict]:
-    now = now or datetime.now()
+    now = now or now_tw()
     upcoming = [e for e in load_exams() if _valid(e) and exam_datetime(e) >= now]
     return sorted(upcoming, key=exam_datetime)
 
 
 def countdown_text(target: datetime, now: datetime | None = None) -> str:
-    now = now or datetime.now()
+    now = now or now_tw()
     delta = target - now
     days = delta.days
     hours = delta.seconds // 3600
@@ -168,7 +169,7 @@ def _add_form(courses: dict, course_opts: list[str], course_fmt, kp: str = "", d
     kind = st.radio(t("要新增什麼？", "What are you adding?"), list(KINDS), format_func=kind_label, horizontal=True,
                     key=f"{kp}add_kind")
     name = kind_label(kind)
-    default_day = day or date.today()
+    default_day = day or today_tw()
     with st.form(f"{kp}add_exam", clear_on_submit=True):
         cid = st.selectbox(t("課表科目（選填）", "Course (optional)"), course_opts, format_func=course_fmt,
                            help=t(f"連結後，{name}卡片會顯示課程顏色與教授，課表上也會標出這項{name}",
@@ -203,7 +204,7 @@ def _add_form(courses: dict, course_opts: list[str], course_fmt, kp: str = "", d
                 place = place.strip() or (course.get("room", "") if course else "")
             if not subject:
                 st.warning(t(f"請選擇課表科目或輸入{name}名稱", "Choose a course or enter a name"))
-            elif when < datetime.now():
+            elif when < now_tw():
                 st.warning(t("這個時間已經過了，請確認日期與時間", "That time has already passed, please check the date and time"))
             elif bad:
                 st.warning(t("以下連結格式不正確（需以 http:// 或 https:// 開頭）：", "These links are invalid (must start with http:// or https://): ")
@@ -237,7 +238,7 @@ def render() -> None:
         st.toast(msg, icon=ico)
 
     timetable, courses, course_opts, course_fmt = _course_ctx()
-    now = datetime.now()
+    now = now_tw()
     _calendar(timetable, courses, course_opts, course_fmt, now)
 
     upcoming = get_upcoming_exams(now)
@@ -286,7 +287,7 @@ def _shift_month(step: int) -> None:
 
 
 def _this_month() -> None:
-    st.session_state.exam_cal_ym = (date.today().year, date.today().month)
+    st.session_state.exam_cal_ym = (today_tw().year, today_tw().month)
 
 
 def _calendar(timetable: dict, courses: dict, course_opts: list[str], course_fmt, now: datetime) -> None:
@@ -354,7 +355,7 @@ def _open_detail(exam: dict, timetable: dict, course_opts: list[str], course_fmt
         if st.session_state.pop("exam_refresh", False):  # 視窗裡改了資料：整頁重畫（同時關閉視窗）
             st.rerun()
         with st.container():  # 卡片獨立一個容器：清單用的 CSS（容器內間距 0）不會影響下面的表單
-            html(exam_card(exam, datetime.now(), timetable))
+            html(exam_card(exam, now_tw(), timetable))
         st.divider()
         _manage(exam, course_opts, course_fmt, kp="dlg_")
     st.dialog(f"{kind_name(exam)}：{exam['subject']}", width="large")(body)()

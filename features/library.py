@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
 
 import pandas as pd
 import streamlit as st
 
+from config import now_tw, today_tw
 from core import nthu_api
 from core.i18n import is_en, t, tr
 from core.icons import before_css, icon, label, tab_css
@@ -250,7 +251,7 @@ def main_library_card(events: list[dict], err: str | None, today: date) -> str:
     head = f'<div class="card-head"><span class="card-title">{icon("book")}{t("總圖書館", "Main Library")}</span></div>'
     if err and not events:
         return card(head + empty(icon("warning") or "⚠️", t("暫時查不到", "Unavailable right now")))
-    now = datetime.now()
+    now = now_tw()
     cur = now.hour * 60 + now.minute
     panels = "".join(_zone_panel(events, z, today, cur) for z in ZONES)
     return card(head + f'<div class="zp-grid">{panels}</div>', cls="lib-main")
@@ -258,7 +259,7 @@ def main_library_card(events: list[dict], err: str | None, today: date) -> str:
 
 # ---------- 開館時間 ----------
 def hours_tab() -> None:
-    today = date.today()
+    today = today_tw()
     st.caption(t("各館開館行事曆（含國定假日、考試週延長開放等）。",
                  "Opening hours of each library (including holidays and extended exam-week hours)."))
     events, err = load_events("library-main", today)

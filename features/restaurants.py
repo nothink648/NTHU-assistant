@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 
 import streamlit as st
 
+from config import now_tw
 from core.i18n import t, weekday
 from core import nthu_api, places
 from core.storage import load_json, load_user_json, save_user_json
@@ -177,11 +178,11 @@ def _auto_refresh(items: list[dict]) -> list[dict]:
     if not places.api_key():
         return items
     changed = False
-    limit = (datetime.now() - timedelta(days=MY_REFRESH_DAYS)).isoformat(timespec="minutes")
+    limit = (now_tw() - timedelta(days=MY_REFRESH_DAYS)).isoformat(timespec="minutes")
     for rec in items:
         if rec.get("place_id") and rec.get("fetched", "") < limit:
             p, err = places.refresh(rec["place_id"])
-            rec["fetched"] = datetime.now().isoformat(timespec="minutes")  # 失敗也等下一輪，避免每次開頁都重試
+            rec["fetched"] = now_tw().isoformat(timespec="minutes")  # 失敗也等下一輪，避免每次開頁都重試
             if p and not err:
                 rec.update({k: v for k, v in places.to_record(p).items() if v not in (None, "")})
             changed = True
@@ -431,7 +432,7 @@ def _add_mine(url: str, name: str, manual: dict | None) -> tuple[bool, str]:
     info, err = places.resolve(url)
     if err:
         return False, err
-    now = datetime.now().isoformat(timespec="minutes")
+    now = now_tw().isoformat(timespec="minutes")
     if manual is None:  # 有金鑰：向 Google 查詢
         p, err = places.lookup(info, name)
         if err:
@@ -479,7 +480,7 @@ def _refresh_mine(my_id: str) -> None:
         st.session_state.food_err = err
         return
     rec.update({k: v for k, v in places.to_record(p).items() if v not in (None, "")},
-               fetched=datetime.now().isoformat(timespec="minutes"))
+               fetched=now_tw().isoformat(timespec="minutes"))
     save_mine(items)
     st.session_state.food_flash = t(f"已更新「{rec['name']}」", f"Updated “{rec['name']}”")
 
@@ -629,7 +630,7 @@ def render() -> None:
         st.warning(data["error"] + (t("（目前顯示離線備份資料）", " (showing offline backup data)") if data.get("offline") and rests else ""))
     if not rests:
         st.info(t("目前沒有餐廳資料，請稍後再試。", "No restaurant data right now. Please try again later."))
-    now = datetime.now()
+    now = now_tw()
     stats = {r["id"]: status(r, now) for r in rests}
     buildings = list(dict.fromkeys(r["building"] for r in rests))
     focus = st.session_state.pop("food_focus", None)  # 從首頁點了某間餐廳：在「全部」分頁標出來並捲過去

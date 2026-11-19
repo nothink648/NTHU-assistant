@@ -11,7 +11,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from config import app_title
+from config import app_title, now_tw
 from core.auth import username
 from core.i18n import fmt_day, is_en, t, tr, weekday
 from core.icons import icon
@@ -37,8 +37,24 @@ HOME_CSS = """<style>
 .st-key-home_stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:6px 0 2px}
 .stat{position:relative;overflow:hidden;display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;
   background:var(--card-bg);border:1px solid var(--line);animation:popIn .45s var(--ease) both;
-  transition:transform .25s var(--ease),box-shadow .25s ease}
-[class*="st-key-hs_"]:hover .stat{transform:translateY(-3px);box-shadow:0 12px 26px rgba(108,99,255,.16)}
+  transition:box-shadow .25s ease}
+/* 四張狀態卡片的點擊結構（和下面 2×2 卡片的「絕對定位按鈕」分開處理）：
+   外框容器 hs_* 改成 1×1 的 grid，卡片 HTML 與透明按鈕疊在同一格，兩者都強制 100% 寬高 → 按鈕的大小就等於白框。
+   注意：st.button 預設 width="content"，Streamlit 會給按鈕外層 width:fit-content，不覆蓋的話只有按鈕文字那一小段點得到。
+   按鈕外層一律 pointer-events:none、只有圓角 button 本身接收點擊 → 圓角外的四個角落、卡片外背景都不會誤觸。
+   浮起動畫做在外框容器上，按鈕跟著卡片一起移動（.stat 有 popIn 動畫，transform 寫在它身上會被動畫蓋掉） */
+.st-key-home_stats [class*="st-key-hs_"]{display:grid!important;grid-template:minmax(0,1fr)/minmax(0,1fr);gap:0!important;
+  border-radius:16px;transition:transform .25s var(--ease)}
+.st-key-home_stats [class*="st-key-hs_"]>*{grid-area:1/1;width:100%!important;max-width:none!important;min-width:0!important;
+  height:100%!important;margin:0!important}
+.st-key-home_stats [class*="st-key-hs_"] div:has(.stat){width:100%;height:100%}
+.st-key-home_stats .stat{box-sizing:border-box;width:100%;height:100%}
+.st-key-home_stats [class*="st-key-go_hs_"]{position:relative!important;inset:auto!important;z-index:3;pointer-events:none}
+.st-key-home_stats [class*="st-key-go_hs_"] div{width:100%!important;max-width:none!important;height:100%!important;pointer-events:none}
+.st-key-home_stats [class*="st-key-go_hs_"] button{display:block;box-sizing:border-box;width:100%!important;max-width:none!important;
+  height:100%!important;min-height:0;margin:0;border-radius:16px;pointer-events:auto;cursor:pointer}
+.st-key-home_stats [class*="st-key-hs_"]:hover{transform:translateY(-3px)}
+.st-key-home_stats [class*="st-key-hs_"]:hover .stat{box-shadow:0 12px 26px rgba(108,99,255,.16)}
 .stat .bar{position:absolute;left:0;right:0;top:0;height:3px}
 .st-key-hs_bus .stat{animation-delay:.06s}.st-key-hs_exam .stat{animation-delay:.12s}.st-key-hs_food .stat{animation-delay:.18s}
 .stat .ic{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:1.35rem}
@@ -306,7 +322,7 @@ def _linked(key: str, markup: str, slug: str, text: str, **state) -> None:
 
 
 def render() -> None:
-    now = datetime.now()
+    now = now_tw()
     html(HOME_CSS.replace("\n", ""))  # 壓成一行：多行時 Markdown 會把 [class*=…] 的 * 當成格式，CSS 變成文字
     name = username(st.session_state.get("auth_uid"))
     hero(greeting(now, name), f"{fmt_day(now, year=True)}　{now:%H:%M}　·　{app_title()}", "home")

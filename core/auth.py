@@ -19,7 +19,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from config import DATA_DIR
+from config import DATA_DIR, now_tw
 from core.i18n import t
 from core.storage import load_json, save_json, user_folder
 
@@ -92,7 +92,7 @@ def register(username: str, password: str, confirm: str) -> tuple[str | None, st
     uid = uuid.uuid4().hex
     salt = secrets.token_hex(16)
     data["users"][uid] = {"username": username, "salt": salt, "hash": _hash(password, salt),
-                          "created": datetime.now().isoformat(timespec="seconds")}
+                          "created": now_tw().isoformat(timespec="seconds")}
     _save(data)
     user_dir(uid)
     moved = _adopt_legacy(uid) if first else []
@@ -156,7 +156,7 @@ def username(uid: str | None) -> str:
 def _issue_token(uid: str) -> str:
     token = secrets.token_urlsafe(24)
     data = _load()
-    now = datetime.now()
+    now = now_tw()
     data["tokens"] = {k: v for k, v in data["tokens"].items()  # 順便清掉過期的
                       if datetime.fromisoformat(v.get("exp", "2000-01-01")) > now}
     data["tokens"][_token_key(token)] = {"uid": uid,
@@ -168,7 +168,7 @@ def _issue_token(uid: str) -> str:
 def _resolve_token(token: str) -> str | None:
     data = _load()
     t = data["tokens"].get(_token_key(token))
-    if not t or datetime.fromisoformat(t.get("exp", "2000-01-01")) <= datetime.now():
+    if not t or datetime.fromisoformat(t.get("exp", "2000-01-01")) <= now_tw():
         return None
     return t["uid"] if t.get("uid") in data["users"] else None
 

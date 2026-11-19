@@ -3,6 +3,7 @@ import streamlit as st
 
 from config import APP_ICON, app_title
 from core.auth import current_uid, sync_cookie
+from core.i18n import t
 from core.login import render_account, render_login
 from core import icons, nav as page_nav
 from core.ui import inject_css
@@ -25,6 +26,7 @@ pages = [
 page_nav.PAGES.update({f.slug: p for f, p in zip(FEATURES, pages)})  # 讓首頁卡片可以跳到各頁
 
 nav = st.navigation(pages)
+page_nav.home_button(t("回首頁", "Back to Home"))  # 頂部列左側 >> 旁的小房子按鈕
 current = next((i for i, p in enumerate(pages, 1) if p.title == nav.title), 0)
 if current:  # 目前所在頁面：icon 與底色用主題色（舊版 Streamlit 沒有 aria-current 可以判斷）
     st.sidebar.markdown(f"<style>[data-testid='stSidebarNavItems'] li:nth-child({current}) [data-testid='stSidebarNavLink']"

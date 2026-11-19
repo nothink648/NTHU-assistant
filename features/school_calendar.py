@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 
 import streamlit as st
 
+from config import TZ, today_tw
 from core import nthu_api
 from core.i18n import fmt_day, is_en, month_year, t, tr
 from core.icons import icon
@@ -71,7 +72,7 @@ def _parse(value: str) -> datetime | None:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return None
-    return dt.astimezone().replace(tzinfo=None) if dt.tzinfo else dt
+    return dt.astimezone(TZ).replace(tzinfo=None) if dt.tzinfo else dt
 
 
 def _normalize(raw: dict, split: bool) -> dict | None:
@@ -170,7 +171,7 @@ def _row(e: dict, today: date) -> str:
 
 
 def render() -> None:
-    today = date.today()
+    today = today_tw()
     html(CSS)
     hero(t("學校行事曆", "School Calendar"), t("清華大學行事曆　·　圖書館開館日曆　·　資料來源 NTHU Data API",
                                            "NTHU academic calendar　·　Library hours　·　Source: NTHU Data API"), "school")

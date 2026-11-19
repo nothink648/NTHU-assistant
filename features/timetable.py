@@ -14,7 +14,7 @@ from datetime import datetime, time
 
 import streamlit as st
 
-from config import PERIODS
+from config import PERIODS, now_tw
 from core import nthu_api
 from core.i18n import is_en, t, weekday
 from core.storage import load_user_json, save_user_json
@@ -95,7 +95,7 @@ def slot_label(slot: dict) -> str:
 
 def today_classes(now: datetime | None = None) -> list[tuple[dict, dict]]:
     """今天的課：[(slot, course), ...]，依開始時間排序。"""
-    now = now or datetime.now()
+    now = now or now_tw()
     data = load_data()
     courses = {c["id"]: c for c in data["courses"]}
     items = [(s, courses[s["course_id"]]) for s in data["slots"]
@@ -477,7 +477,7 @@ def grid_html(data: dict) -> tuple[str, list[dict]]:
         assign_lanes([b for b in blocks if b["day"] == d])
 
     cells = ['<div class="tt-h" style="grid-row:1;grid-column:1"></div>']
-    today = datetime.now().weekday()
+    today = now_tw().weekday()
     cells += [f'<div class="tt-h{" today" if d == today else ""}" style="grid-row:1;grid-column:{col[d]}">'
               f'{weekday(d)}</div>' for d in days]
     for i, (period, a, b) in enumerate(PERIODS):

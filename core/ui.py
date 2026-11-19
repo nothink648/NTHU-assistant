@@ -58,8 +58,29 @@ _CSS = """
 [data-testid="stHeader"]{background:transparent!important}
 /* 右上角選單只留主題切換：隱藏 Print、Record screen（Rerun / Clear cache / Deploy 由 config.toml 的 toolbarMode="viewer" 隱藏） */
 [data-testid="stMainMenuItem-print"],[data-testid="stMainMenuItem-recordScreencast"],[data-testid="stMainMenuDivider"]{display:none!important}
+/* 平台浮水印：只藏 Fork / GitHub 圖示、頂部彩條、右下角皇冠與開發者頭像徽章 */
+[data-testid="stToolbarActions"],[data-testid="stDecoration"],[class*="viewerBadge"],
+[data-testid="manage-app-button"],.stAppDeployButton{display:none!important}
+/* 頂部列、三點選單（Settings / 深色模式）、本機的 Rerun 狀態列一定要留著可以點 */
+[data-testid="stHeader"],[data-testid="stToolbar"],#MainMenu,[data-testid="stMainMenu"],
+[data-testid="stStatusWidget"]{visibility:visible!important;pointer-events:auto!important}
 /* 寫登入 cookie 用的隱形元件（見 core/auth.py）不佔版面 */
 :is([data-testid="stElementContainer"],.element-container):has(iframe[srcdoc*="nthu_assistant_s"]){display:none!important}
+/* 一鍵回首頁（見 core/nav.py 的 home_button）：側邊欄裡的真按鈕與安裝用的隱形元件都不顯示 */
+.st-key-nthu_home_go,
+:is([data-testid="stElementContainer"],.element-container):has(iframe[srcdoc*="nthu_assistant_home"]){display:none!important}
+#nthu-home{flex:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;
+  width:34px;height:34px;margin:0 0 0 10px;padding:0;border-radius:10px;cursor:pointer;
+  background:#fff;color:#6C63FF;border:1px solid rgba(108,99,255,.22);box-shadow:0 2px 8px rgba(30,20,90,.12);
+  transition:transform .18s var(--ease),box-shadow .18s ease,border-color .18s ease}
+#nthu-home:first-child{margin-left:1rem}  /* 側邊欄展開時沒有 >>，自己靠左 */
+#nthu-home:hover{transform:translateY(-1px);border-color:#6C63FF;box-shadow:0 6px 16px rgba(108,99,255,.25)}
+#nthu-home:active{transform:scale(.94)}
+#nthu-home:focus-visible{outline:2px solid #6C63FF;outline-offset:2px}
+#nthu-home .ico{width:19px;height:19px;vertical-align:0;display:block}  /* 專案原本的首頁 icon（mask，顏色跟著按鈕的紫色） */
+#nthu-home{font-size:1.05rem;line-height:1}  /* 沒有圖檔時顯示的 🏠 */
+#nthu-home.fixed{position:fixed;top:12px;left:3.6rem;z-index:999991;margin:0}  /* 舊版 Streamlit 找不到頂部列時的備案 */
+@media (max-width:430px){#nthu-home{width:32px;height:32px;margin-left:8px}#nthu-home .ico{width:18px;height:18px}}
 [data-testid="stExpander"] details{background:var(--solid)}
 
 /* ---------- 動畫 ---------- */
@@ -75,7 +96,6 @@ _CSS = """
 
 /* ---------- 版面 ---------- */
 .block-container,[data-testid="stMainBlockContainer"]{padding-top:2.4rem;padding-bottom:3rem;max-width:1100px}
-[data-testid="stDecoration"]{background:linear-gradient(90deg,var(--acc),var(--acc3))!important;height:3px}
 hr{border-color:var(--line)!important}
 
 /* 換頁 / 切換分頁時，內容由下往上淡入 */

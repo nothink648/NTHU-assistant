@@ -1,5 +1,31 @@
 """全域設定：之後想改名稱、圖示、資料夾位置、節次時間，都在這裡改。"""
+import os
+import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+# ---------- 時區：全站一律用台灣時間（UTC+8），不管伺服器部署在哪個時區 ----------
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Taipei")
+except Exception:  # Windows 沒裝 tzdata 時找不到時區資料；台灣沒有日光節約，固定 +8 即可
+    TZ = timezone(timedelta(hours=8), "Asia/Taipei")
+
+# 保險：讓沒經過 now_tw() 的 time.localtime() 等也用台灣時間（Windows 沒有 tzset，略過）
+os.environ["TZ"] = "Asia/Taipei"
+if hasattr(time, "tzset"):
+    time.tzset()
+
+
+def now_tw() -> datetime:
+    """現在的台灣時間（不帶時區資訊，方便跟資料檔裡存的時間直接比較）。取代 datetime.now()。"""
+    return datetime.now(TZ).replace(tzinfo=None)
+
+
+def today_tw() -> date:
+    """今天的台灣日期。取代 date.today()。"""
+    return now_tw().date()
+
 
 APP_TITLE = "校園助手"
 APP_TITLE_EN = "Campus Assistant"
