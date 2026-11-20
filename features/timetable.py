@@ -32,6 +32,27 @@ PERIOD_LABELS = [p[0] for p in PERIODS]
 PALETTE = ["#6C63FF", "#E5486F", "#2E9E6A", "#E08A1E", "#2C8BC9", "#9B51E0", "#B89A0B", "#1E9E94"]
 
 
+def _safe_period(value, fallback: str = PERIOD_LABELS[0]) -> str:
+    """節次防呆：值不在 PERIOD_LABELS 裡（None、舊資料、數字型別、被 Streamlit 清掉後的殘值…）就回退成 fallback。"""
+    v = str(value).strip() if value is not None else ""
+    if v in PERIOD_LABELS:
+        return v
+    return fallback if fallback in PERIOD_LABELS else PERIOD_LABELS[0]
+
+
+def _pidx(value) -> int:
+    """安全版的 PERIOD_LABELS.index()：保證不會丟 ValueError。"""
+    return PERIOD_LABELS.index(_safe_period(value))
+
+
+def _parse_time(hhmm, fallback: time) -> time:
+    try:
+        h, m = map(int, str(hhmm).split(":"))
+        return time(h, m)
+    except (ValueError, TypeError):
+        return fallback
+
+
 def _tint(hex_color: str, alpha: float = 0.22) -> str:
     r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
     return f"rgba({r},{g},{b},{alpha})"
@@ -119,6 +140,21 @@ def _init_state() -> None:
     ss.setdefault("tt_c_end", time(9, 0))
     ss.setdefault("tt_msgs", [])
     ss.setdefault("tt_lookup_msgs", [])
+    ss.setdefault("tt_ed_open", set())  # 「課程管理」中目前展開的時段編輯框（slot id 或 new_<課程 id>）
+    _sanitize_periods("tt")
+
+
+def _sanitize_periods(prefix: str) -> None:
+    """每次重跑、建立節次選單之前先校正：起訖節次一定是 PERIOD_LABELS 裡的有效值。
+
+    selectbox 的值存在 session_state；切到「自訂時間」或「自動帶入」時選單沒有被畫出來，
+    Streamlit 會把它的 key 清掉，之後再補回或從舊資料帶入時就可能出現不在清單中的值，
+    這正是 .index() 丟出 ValueError 的來源。這裡統一修正，所有 .index() 也改用 _pidx()。
+    """
+    ss = st.session_state
+    start = _safe_period(ss.get(f"{prefix}_p_start"))
+    ss[f"{prefix}_p_start"] = start
+    ss[f"{prefix}_p_end"] = _safe_period(ss.get(f"{prefix}_p_end"), start)
 
 
 def _on_course_change() -> None:
@@ -143,10 +179,40 @@ def _on_src_change() -> None:
     _on_course_change()
 
 
-def _on_start_change() -> None:
+def _on_start_change(prefix: str = "tt") -> None:
+    """開始節次改了 → 結束節次若早於開始就跟著調整（新增表單與時段編輯框共用）。"""
     ss = st.session_state
-    if PERIOD_LABELS.index(ss.tt_p_end) < PERIOD_LABELS.index(ss.tt_p_start):
-        ss.tt_p_end = ss.tt_p_start
+    start = _safe_period(ss.get(f"{prefix}_p_start"))
+    end = _safe_period(ss.get(f"{prefix}_p_end"), start)
+    ss[f"{prefix}_p_start"] = start
+    ss[f"{prefix}_p_end"] = start if _pidx(end) < _pidx(start) else end
+
+
+def _slot_time(prefix: str) -> tuple[tuple[str, str, list | None] | None, str | None]:
+    """讀取表單（prefix_mode / _p_start / _p_end / _c_start / _c_end）→ ((start, end, periods), None) 或 (None, 錯誤訊息)。"""
+    ss = st.session_state
+    if ss.get(f"{prefix}_mode", MODE_P) == MODE_P:
+        a = _safe_period(ss.get(f"{prefix}_p_start"))
+        b = _safe_period(ss.get(f"{prefix}_p_end"), a)
+        if _pidx(b) < _pidx(a):
+            return None, t("結束節次不能早於開始節次", "The end period cannot be before the start period")
+        return (PERIOD_TIME[a][0], PERIOD_TIME[b][1], [a, b]), None
+    c_start, c_end = ss.get(f"{prefix}_c_start"), ss.get(f"{prefix}_c_end")
+    if not isinstance(c_start, time) or not isinstance(c_end, time) or c_end <= c_start:
+        return None, t("結束時間必須晚於開始時間", "The end time must be after the start time")
+    return (f"{c_start:%H:%M}", f"{c_end:%H:%M}", None), None
+
+
+def _overlap_notes(data: dict, course_id: str, day: int, start: str, end: str, skip_id: str | None = None) -> list[str]:
+    """和其他課程時間重疊的提醒（skip_id：編輯時略過自己）。"""
+    notes = []
+    for s in data["slots"]:
+        if s.get("id") == skip_id or s["day"] != day or not overlaps(start, end, s["start"], s["end"]):
+            continue
+        other = find_course(data, s["course_id"])
+        if other and other["id"] != course_id:
+            notes.append(t(f"{weekday(day)} 與「{other['name']}」時間重疊", f"{weekday(day)}: overlaps with “{other['name']}”"))
+    return notes
 
 
 def _add_slots() -> None:
@@ -158,15 +224,10 @@ def _add_slots() -> None:
     if not ss.tt_days:
         return err(t("請至少選一個星期", "Please choose at least one day"))
 
-    if ss.tt_mode == MODE_P:
-        a, b = ss.tt_p_start, ss.tt_p_end
-        if PERIOD_LABELS.index(b) < PERIOD_LABELS.index(a):
-            return err(t("結束節次不能早於開始節次", "The end period cannot be before the start period"))
-        start, end, periods = PERIOD_TIME[a][0], PERIOD_TIME[b][1], [a, b]
-    else:
-        if ss.tt_c_end <= ss.tt_c_start:
-            return err(t("結束時間必須晚於開始時間", "The end time must be after the start time"))
-        start, end, periods = f"{ss.tt_c_start:%H:%M}", f"{ss.tt_c_end:%H:%M}", None
+    when, problem = _slot_time("tt")
+    if problem:
+        return err(problem)
+    start, end, periods = when
 
     data = load_data()
     picked = find_course(data, ss.tt_course)
@@ -566,20 +627,7 @@ def _tab_add(data: dict) -> None:
         st.markdown(f"**{icon('clock') or '🕘'} {t('上課時段', 'Class time')}**", unsafe_allow_html=True)
         st.multiselect(t("星期（可複選，同節次的多天一次加入）", "Days (pick several to add them all at once)"), list(range(7)),
                        key="tt_days", format_func=weekday, placeholder=t("選擇星期", "Choose days"))
-        st.radio(t("時段類型", "Time type"), [MODE_P, MODE_C], key="tt_mode", horizontal=True, format_func=mode_label)
-        if ss.tt_mode == MODE_P:
-            fmt = lambda p: t(f"第 {p} 節", f"Period {p}") + f"　{PERIOD_TIME[p][0]}–{PERIOD_TIME[p][1]}"
-            s1, s2 = st.columns(2)
-            s1.selectbox(t("開始節次", "Start period"), PERIOD_LABELS, key="tt_p_start", format_func=fmt,
-                         on_change=_on_start_change)
-            s2.selectbox(t("結束節次", "End period"), PERIOD_LABELS, key="tt_p_end", format_func=fmt)
-            if PERIOD_LABELS.index(ss.tt_p_end) >= PERIOD_LABELS.index(ss.tt_p_start):
-                st.caption(f"{icon('alarm') or '⏰'} {PERIOD_TIME[ss.tt_p_start][0]}–{PERIOD_TIME[ss.tt_p_end][1]}",
-                           unsafe_allow_html=True)
-        else:
-            t1, t2 = st.columns(2)
-            t1.time_input(t("開始時間", "Start time"), key="tt_c_start", step=300)
-            t2.time_input(t("結束時間", "End time"), key="tt_c_end", step=300)
+        _time_inputs("tt")
 
     st.button(label("add", t("新增這個時段", "Add this slot")), type="primary", on_click=_add_slots, key="tt_add_btn")
 
@@ -587,6 +635,143 @@ def _tab_add(data: dict) -> None:
     if ss.tt_src == SRC_EXIST:
         st.caption(t("選已填過的課程時，修改教授 / 學分 / 備註會一併更新該課程；想改課程名稱請到「課程管理」。",
                      "Editing teacher / credits / note of an existing course updates that course; rename courses under “Manage courses”."))
+
+
+def _time_inputs(prefix: str) -> None:
+    """「時段類型」單選 + 節次 / 自訂時間輸入（新增表單與時段編輯框共用同一套元件）。"""
+    ss = st.session_state
+    _sanitize_periods(prefix)  # 建立節次選單前再保險一次
+    st.radio(t("時段類型", "Time type"), [MODE_P, MODE_C], key=f"{prefix}_mode", horizontal=True, format_func=mode_label)
+    if ss[f"{prefix}_mode"] == MODE_P:
+        fmt = lambda p: t(f"第 {p} 節", f"Period {p}") + f"　{PERIOD_TIME[p][0]}–{PERIOD_TIME[p][1]}"
+        s1, s2 = st.columns(2)
+        s1.selectbox(t("開始節次", "Start period"), PERIOD_LABELS, key=f"{prefix}_p_start", format_func=fmt,
+                     on_change=_on_start_change, args=(prefix,))
+        s2.selectbox(t("結束節次", "End period"), PERIOD_LABELS, key=f"{prefix}_p_end", format_func=fmt)
+        a, b = _safe_period(ss.get(f"{prefix}_p_start")), _safe_period(ss.get(f"{prefix}_p_end"))
+        if _pidx(b) >= _pidx(a):
+            st.caption(f"{icon('alarm') or '⏰'} {PERIOD_TIME[a][0]}–{PERIOD_TIME[b][1]}", unsafe_allow_html=True)
+    else:
+        t1, t2 = st.columns(2)
+        t1.time_input(t("開始時間", "Start time"), key=f"{prefix}_c_start", step=300)
+        t2.time_input(t("結束時間", "End time"), key=f"{prefix}_c_end", step=300)
+
+
+# ---------- 課程管理：編輯既有時段 / 新增時段 ----------
+def _ed_prefix(eid: str) -> str:
+    return f"tt_ed_{eid}"
+
+
+def _slot_defaults(slot: dict | None, course: dict) -> dict:
+    """編輯框的初始值：編輯既有時段帶入原本內容；新增時段用空白表單（教室帶入課程預設教室）。"""
+    if slot is None:
+        return {"days": [], "mode": MODE_P, "p_start": PERIOD_LABELS[0], "p_end": PERIOD_LABELS[0],
+                "c_start": time(8, 0), "c_end": time(9, 0), "room": course.get("room", "")}
+    p = slot.get("periods") or []
+    valid = (isinstance(p, (list, tuple)) and len(p) == 2
+             and all(str(x).strip() in PERIOD_LABELS for x in p))  # 節次資料不完整 → 改用自訂時間
+    a = _safe_period(p[0]) if valid else PERIOD_LABELS[0]
+    b = _safe_period(p[1], a) if valid else a
+    return {"day": int(slot.get("day", 0)) % 7, "mode": MODE_P if valid else MODE_C, "p_start": a, "p_end": b,
+            "c_start": _parse_time(slot.get("start"), time(8, 0)), "c_end": _parse_time(slot.get("end"), time(9, 0)),
+            "room": slot.get("room", "")}
+
+
+def _toggle_editor(eid: str, defaults: dict) -> None:
+    """按 ✏️ / + Add time slot：展開時重新帶入初始值，再按一次就收合。"""
+    ss = st.session_state
+    if eid in ss.tt_ed_open:
+        ss.tt_ed_open.discard(eid)
+        return
+    p = _ed_prefix(eid)
+    for k, v in defaults.items():
+        ss[f"{p}_{k}"] = list(v) if isinstance(v, list) else v
+    _sanitize_periods(p)
+    ss.tt_ed_open.add(eid)
+
+
+def _close_editor(eid: str) -> None:
+    st.session_state.tt_ed_open.discard(eid)
+
+
+def _save_slot(eid: str, cid: str, slot_id: str | None) -> None:
+    """編輯框的 Save：slot_id 有值 → 更新該時段；None → 依勾選的星期新增時段。"""
+    ss = st.session_state
+    p = _ed_prefix(eid)
+    msgs = ss.setdefault(f"tt_mmsg_{cid}", [])
+    when, problem = _slot_time(p)
+    if problem:
+        msgs.append(("error", problem))
+        return
+    start, end, periods = when
+    room = str(ss.get(f"{p}_room", "")).strip()
+    data = load_data()
+    if find_course(data, cid) is None:
+        msgs.append(("error", t("找不到這門課程，可能已被刪除", "This course no longer exists")))
+        ss.tt_ed_open.discard(eid)
+        return
+
+    if slot_id:  # 編輯既有時段
+        slot = next((s for s in data["slots"] if s.get("id") == slot_id), None)
+        if slot is None:
+            msgs.append(("error", t("找不到這個時段，可能已被刪除", "This slot no longer exists")))
+            ss.tt_ed_open.discard(eid)
+            return
+        day = int(ss.get(f"{p}_day", slot["day"])) % 7
+        if any(s.get("id") != slot_id and s["course_id"] == cid and s["day"] == day and s["start"] == start
+               and s["end"] == end for s in data["slots"]):
+            msgs.append(("error", t(f"{weekday(day)}已有相同時段", f"{weekday(day)}: the same slot already exists")))
+            return
+        notes = _overlap_notes(data, cid, day, start, end, skip_id=slot_id)
+        slot.update(day=day, periods=periods, start=start, end=end, room=room)
+        save_data(data)
+        msgs.append(("success", t(f"已更新時段：{slot_label(slot)}", f"Slot updated: {slot_label(slot)}")))
+    else:  # 新增時段（可複選星期）
+        days = sorted({int(d) % 7 for d in ss.get(f"{p}_days") or []})
+        if not days:
+            msgs.append(("error", t("請至少選一個星期", "Please choose at least one day")))
+            return
+        added, notes = [], []
+        for d in days:
+            if any(s["course_id"] == cid and s["day"] == d and s["start"] == start and s["end"] == end
+                   for s in data["slots"]):
+                notes.append(t(f"{weekday(d)}已有相同時段，略過", f"{weekday(d)}: same slot already exists, skipped"))
+                continue
+            notes += _overlap_notes(data, cid, d, start, end)
+            data["slots"].append({"id": uuid.uuid4().hex, "course_id": cid, "day": d,
+                                  "periods": periods, "start": start, "end": end, "room": room})
+            added.append(weekday(d))
+        if not added:
+            msgs += [("warning", n) for n in notes]
+            return
+        save_data(data)
+        msgs.append(("success", t(f"已新增時段：{'、'.join(added)} {start}–{end}",
+                                  f"Added slot: {', '.join(added)} {start}–{end}")))
+    msgs += [("warning", n) for n in notes]
+    ss.tt_ed_open.discard(eid)  # 儲存成功 → 收合編輯框
+
+
+def _slot_editor(eid: str, cid: str, course: dict, slot: dict | None) -> None:
+    """展開的時段編輯框：元件與「新增時段」分頁的 Class time 區塊相同。"""
+    ss = st.session_state
+    p = _ed_prefix(eid)
+    for k, v in _slot_defaults(slot, course).items():  # 選單沒畫出來時 key 會被清掉 → 補回
+        if f"{p}_{k}" not in ss:
+            ss[f"{p}_{k}"] = list(v) if isinstance(v, list) else v
+    with st.container(border=True, key=f"tt_edbox_{eid}"):
+        title = t("編輯時段", "Edit time slot") if slot else t("新增時段", "Add time slot")
+        st.markdown(f"**{icon('clock') or '🕘'} {title}**", unsafe_allow_html=True)
+        if slot:
+            st.selectbox(t("星期", "Day"), list(range(7)), key=f"{p}_day", format_func=weekday)
+        else:
+            st.multiselect(t("星期（可複選，同節次的多天一次加入）", "Days (pick several to add them all at once)"),
+                           list(range(7)), key=f"{p}_days", format_func=weekday, placeholder=t("選擇星期", "Choose days"))
+        _time_inputs(p)
+        st.text_input(t("教室", "Classroom"), key=f"{p}_room")
+        with st.container(horizontal=True, gap="small"):
+            st.button(label("save", t("儲存", "Save")), type="primary", key=f"save_slot_{eid}",
+                      on_click=_save_slot, args=(eid, cid, slot["id"] if slot else None))
+            st.button(t("取消", "Cancel"), key=f"tt_cancel_{eid}", on_click=_close_editor, args=(eid,))
 
 
 def _tab_manage(data: dict) -> None:
@@ -601,8 +786,9 @@ def _tab_manage(data: dict) -> None:
         n_exam = (t(f"　·　{len(exams[cid])} 項考試 / 作業", f"　·　{len(exams[cid])} exams / homework")
                   if exams.get(cid) else "")
         cr = float(c.get("credits", 0))
+        # 有 key 的 expander：標題的「X slots」數字變了也不會自動收合
         with st.expander(f"{c['name']}　·　" + t(f"{cr:g} 學分　·　{len(mine)} 個時段", f"{cr:g} credits　·　{len(mine)} slots")
-                         + n_exam):
+                         + n_exam, key=f"tt_exp_{cid}", on_change="rerun"):
             for e in exams.get(cid, []):
                 place = f"　{icon('pin')}{esc(e['place'])}" if e.get("place") else ""
                 st.markdown(f"{icon('edit') or '📝'} **{esc(e['subject'])}**　{e['datetime'][:16].replace('T', ' ')}{place}",
@@ -619,14 +805,29 @@ def _tab_manage(data: dict) -> None:
                     save_data(data)
                     st.rerun()
             for s in mine:
-                l, r = st.columns([8, 1])
+                sid = s["id"]
+                l, r = st.columns([6, 2], vertical_alignment="center")
                 room = f"　{icon('pin')}{esc(s['room'])}" if s.get("room") else ""
                 l.markdown(f"{icon('clock') or '🕘'} {slot_label(s)}{room}", unsafe_allow_html=True)
-                # 有圖時按鈕文字只放零寬空白，垃圾桶由 CSS 畫上（core/icons.py）
-                if r.button("​" if has("trash") else "🗑️", key=f"del_slot_{s['id']}", help=t("刪除這個時段", "Delete this slot")):
-                    data["slots"] = [x for x in data["slots"] if x["id"] != s["id"]]
+                # ✏️ 與 🗑️ 放在同一列（水平容器，窄螢幕也不會上下換行）；有圖時文字只放零寬空白，圖示由 CSS 畫上
+                with r, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
+                    st.button("​" if has("edit") else "✏️", key=f"tt_edslot_{sid}", help=t("編輯這個時段", "Edit this slot"),
+                              on_click=_toggle_editor, args=(sid, _slot_defaults(s, c)))
+                    deleted = st.button("​" if has("trash") else "🗑️", key=f"del_slot_{sid}",
+                                        help=t("刪除這個時段", "Delete this slot"))
+                if deleted:
+                    data["slots"] = [x for x in data["slots"] if x["id"] != sid]
                     save_data(data)
+                    st.session_state.tt_ed_open.discard(sid)
                     st.rerun()
+                if sid in st.session_state.tt_ed_open:
+                    _slot_editor(sid, cid, c, s)
+            new_eid = f"new_{cid}"
+            st.button(label("add", t("新增時段", "Add time slot")) if has("add") else "＋ " + t("新增時段", "Add time slot"),
+                      key=f"tt_addslot_{cid}", on_click=_toggle_editor, args=(new_eid, _slot_defaults(None, c)))
+            if new_eid in st.session_state.tt_ed_open:
+                _slot_editor(new_eid, cid, c, None)
+            _show_msgs(f"tt_mmsg_{cid}")
             if st.button(label("trash", t("刪除整門課程（含所有時段）", "Delete course (and all its slots)")), key=f"del_course_{cid}"):
                 data["courses"] = [x for x in data["courses"] if x["id"] != cid]
                 data["slots"] = [x for x in data["slots"] if x["course_id"] != cid]
@@ -640,7 +841,10 @@ def render() -> None:
     data = load_data()
     # 分頁標籤與「新增這個時段」按鈕的 icon（標籤只能放純文字，icon 用 CSS 畫上）
     html("<style>" + tab_css("tt_tabs", ["calendar", "add", "manage-dates"])
-         + before_css(".st-key-tt_add_btn button p", "add") + "</style>")
+         + before_css(".st-key-tt_add_btn button p", "add")
+         + before_css("[class*='st-key-tt_edslot_'] button p", "edit")      # 時段的編輯鈕（只有圖示）
+         + before_css("[class*='st-key-tt_addslot_'] button p", "add")      # 課程管理「新增時段」
+         + "[class*='st-key-tt_edslot_'] button p::before{margin-right:0}</style>")
     with st.container(key="tt_tabs"):
         tab1, tab2, tab3 = st.tabs([label("calendar", t("我的課表", "My timetable")), label("add", t("新增時段", "Add slot")),
                                     label("manage-dates", t("課程管理", "Manage courses"))])
